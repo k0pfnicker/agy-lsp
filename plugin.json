@@ -1,0 +1,5 @@
+{
+  "name": "agy-lsp",
+  "description": "Language Server Protocol (LSP) Bridge for Antigravity CLI. Exposes diagnostics, definitions, references, hover, symbols, call hierarchy, and refactoring via MCP.",
+  "version": "1.0.0"
+}

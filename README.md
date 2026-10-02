@@ -5,47 +5,50 @@
 [![MCP](https://img.shields.io/badge/MCP-2.0%20%2F%201.0-orange.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**agy-lsp** ist ein produktionsreifes, professionelles Plugin für das **Google Antigravity CLI (`agy`)**. Es verbindet den KI-Agenten über das standardisierte **Model Context Protocol (MCP)** mit nativen **Language Servern (LSP)** für C#, C/C++, TypeScript/JavaScript und Python.
+*Read this in other languages: [English](README.md) | [Deutsch](README.de.md)*
+
+**agy-lsp** is a production-ready, professional plugin for the **Google Antigravity CLI (`agy`)**. It connects AI coding agents to native **Language Servers (LSP)** for C#, C/C++, TypeScript/JavaScript, and Python via the standardized **Model Context Protocol (MCP)**.
 
 ---
 
-## Inhaltsverzeichnis
+## Table of Contents
 
-1. [Zweck und Nutzen](#zweck-und-nutzen)
-2. [Architektur](#architektur)
-3. [MCP-Tools im Überblick](#mcp-tools-im-%C3%BCberblick)
-4. [Unterstützte Sprachen & Language Server](#unterst%C3%BCtzte-sprachen--language-server)
-5. [Voraussetzungen](#voraussetzungen)
-6. [Installation & Schnellstart](#installation--schnellstart)
+1. [Purpose & Benefits](#purpose--benefits)
+2. [Architecture](#architecture)
+3. [MCP Tools Overview](#mcp-tools-overview)
+4. [Supported Languages & Language Servers](#supported-languages--language-servers)
+5. [Prerequisites](#prerequisites)
+6. [Installation & Quickstart](#installation--quickstart)
    - [Windows](#windows)
    - [Linux / macOS](#linux--macos)
-7. [Einrichtung in Antigravity CLI](#einrichtung-in-antigravity-cli)
-8. [Installation der Language Server](#installation-der-language-server)
-9. [Konfiguration (`agy-lsp.json`)](#konfiguration-agy-lspjson)
-10. [Token-Effizienz & Kontext-Optimierung](#token-effizienz--kontext-optimierung)
-11. [Sicherheitsmodell](#sicherheitsmodell)
-12. [Troubleshooting & Diagnose](#troubleshooting--diagnose)
-13. [Entwicklung, Tests & Qualitätssicherung](#entwicklung-tests--qualit%C3%A4tssicherung)
-14. [Erweiterung um neue Sprachen](#erweiterung-um-neue-sprachen)
-15. [Bekannte Einschränkungen](#bekannte-einschr%C3%A4nkungen)
+7. [Integration into Antigravity CLI](#integration-into-antigravity-cli)
+8. [Language Server Installation](#language-server-installation)
+9. [Configuration (`agy-lsp.json`)](#configuration-agy-lspjson)
+10. [Token Efficiency & Context Optimization](#token-efficiency--context-optimization)
+11. [Security Model](#security-model)
+12. [Troubleshooting & Diagnostics](#troubleshooting--diagnostics)
+13. [Development, Testing & QA](#development-testing--qa)
+14. [Adding New Languages](#adding-new-languages)
+15. [Known Limitations](#known-limitations)
+16. [License](#license)
 
 ---
 
-## 1. Zweck und Nutzen
+## 1. Purpose & Benefits
 
-Große Sprachmodelle (LLMs) scheitern in Softwareprojekten häufig an zwei Hürden:
-1. **Unpräzise Suche:** Volltextsuche und das Lesen ganzer Dateien verbrauchen tausende Kontext-Token und übersehen oft semantische Zusammenhänge (z. B. Überladungen, Vererbung oder Namespaces).
-2. **Fehlendes Feedback:** Nach Code-Modifikationen bemerkt der Agent Syntax-, Typprüfungs- oder Importfehler oft erst spät oder gar nicht.
+Large Language Models (LLMs) often face two major challenges when working in real-world software codebases:
+1. **Inaccurate Search & Context Waste:** Plaintext keyword search and reading entire files consumes thousands of context tokens while frequently missing semantic relationships (such as method overloads, polymorphism, interface implementations, and namespaces).
+2. **Missing Feedback Loops:** After modifying code, agents often fail to notice syntax, type-checking, or import errors until much later or not at all.
 
-**agy-lsp** löst dieses Problem, indem es dem Antigravity-Agenten direkte Compiler- und Typintelligenz über standardisierte MCP-Tools bereitstellt:
-- **Präzise Symbol-Navigation:** Definitionen und Referenzen ohne Raten anspringen.
-- **Automatisierte Qualitätskontrolle:** Compiler-Diagnosen (Errors, Warnings) direkt nach Dateiänderungen abfragen.
-- **Sicheres Refactoring:** Symbol-Umbenennungen werden standardmäßig als Unified-Diff-Vorschau berechnet, bevor Dateien modifiziert werden.
-- **Geringer Tokenverbrauch:** Kompakte Snippets, Dokument-Outlines und strikte Treffer-Limits.
+**agy-lsp** bridges this gap by giving the Antigravity agent direct compiler and type intelligence via standardized MCP tools:
+- **Precise Symbol Navigation:** Jump to definitions and query all workspace references without guessing.
+- **Automated Quality Control:** Fetch compiler diagnostics (errors, warnings, hints) immediately after edits.
+- **Safe Refactoring:** Symbol renaming generates a unified preview diff before any changes are written to disk.
+- **Minimized Token Usage:** Compact snippets, structural document outlines, and strict result limits prevent context bloat.
 
 ---
 
-## 2. Architektur
+## 2. Architecture
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -61,7 +64,7 @@ Große Sprachmodelle (LLMs) scheitern in Softwareprojekten häufig an zwei Hürd
 │                                                             │
 │  ├── Tool Schemas (get_diagnostics, go_to_definition, ...)  │
 │  ├── Document Sync (didOpen, didChange, didClose, Cache)    │
-│  ├── Token Reducer (Snippet-Schnitt, Deduplizierung, Limit) │
+│  ├── Token Reducer (Snippet extraction, Dedup, Limits)      │
 │  └── Workspace Confinement Security Check                   │
 └─────────────────────────────┬───────────────────────────────┘
                               │
@@ -77,119 +80,124 @@ Große Sprachmodelle (LLMs) scheitern in Softwareprojekten häufig an zwei Hürd
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Die Bridge startet Language-Server-Prozesse **bedarfsgesteuert (Lazy-Loading)** erst dann, wenn ein Tool eine Datei der entsprechenden Sprache anfragt. Laufende Prozesse werden über die gesamte Session wiederverwendet und bei Abstürzen mit begrenzter Retry-Anzahl automatisch wiederhergestellt.
+The bridge launches Language Server processes **on demand (lazy loading)** only when a tool targets a file belonging to that language. Running processes are reused throughout the session and automatically recovered with bounded retries if a crash occurs.
 
 ---
 
-## 3. MCP-Tools im Überblick
+## 3. MCP Tools Overview
 
-Das Plugin registriert 11 performante MCP-Tools:
+The plugin registers 11 high-performance MCP tools:
 
-| Tool | Zweck | Wichtige Parameter | Rückgabewert |
+| Tool | Purpose | Key Parameters | Return Value |
 | :--- | :--- | :--- | :--- |
-| `get_diagnostics` | Fehler, Warnungen und Hinweise für eine Datei oder das gesamte Projekt abfragen | `file_path`, `line_start`, `line_end`, `severity`, `limit` | Liste deduplizierter Diagnosen mit Datei, Zeile, Spalte, Code und Nachricht. |
-| `go_to_definition` | Springt von einer Position zur Deklaration/Definition | `file_path`, `line`, `character`, `include_snippet` | Zieldatei, Zeilenbereich, optionaler kompakter Code-Ausschnitt. |
-| `find_references` | Findet alle Verwendungsstellen eines Symbols | `file_path`, `line`, `character`, `include_declaration`, `limit` | Liste aller Referenzen im Workspace. |
-| `rename_symbol` | Führt ein symbolweites Umbenennen via LSP durch | `file_path`, `line`, `character`, `new_name`, `apply` | **Preview-Diff** aller betroffenen Dateien. Schreiben auf Festplatte erfordert `apply=True` und `writeChanges=True`. |
-| `document_symbols` | Liefert hierarchische Gliederung (Klassen, Methoden, Felder) | `file_path`, `query` | Symbolbaum mit Art, Zeilenbereich und Bezeichnern. |
-| `workspace_symbols` | Durchsucht das gesamte Projekt nach Symbolen | `query`, `limit` | Trefferliste mit Name, Symbol-Art, Datei und Position. |
-| `hover` | Zeigt Signaturen, Typen und Docstrings | `file_path`, `line`, `character` | Markdown-formatiertes Hover-Ergebnis. |
-| `prepare_call_hierarchy` | Prüft Unterstützung und liefert Call-Hierarchy-Item | `file_path`, `line`, `character` | Vorbereitetes Symbol für den Aufrufbaum. |
-| `call_hierarchy` | Ermittelt Aufrufer (`incoming`) oder aufgerufene Methoden (`outgoing`) | `file_path`, `line`, `character`, `direction` | Liste der Aufrufer bzw. Unterfunktionen. |
-| `get_type_hierarchy` | Liefert Basistypen (`supertypes`) oder Subklassen (`subtypes`) | `file_path`, `line`, `character`, `direction` | Vererbungshierarchie des Typs. |
-| `lsp_status` | Status aller Server, Workspace-Root und Fehler | *keine* | JSON-Übersicht mit Server-Zustand (`RUNNING`, `AVAILABLE`, `NOT_INSTALLED`, `CRASHED`), PID und Pfad. |
+| `get_diagnostics` | Retrieve compiler errors, warnings, and hints for a file or workspace | `file_path`, `line_start`, `line_end`, `severity`, `limit` | List of deduplicated diagnostics with file, line, column, code, and message. |
+| `go_to_definition` | Jump from a symbol position to its definition/declaration | `file_path`, `line`, `character`, `include_snippet` | Target file, line range, and optional compact code excerpt. |
+| `find_references` | Locate all usages of a symbol across the workspace | `file_path`, `line`, `character`, `include_declaration`, `limit` | List of reference locations across files. |
+| `rename_symbol` | Perform workspace-wide LSP rename refactoring | `file_path`, `line`, `character`, `new_name`, `apply` | **Unified preview diff** across all affected files. Disk writes require `apply=True` and `writeChanges=True`. |
+| `document_symbols` | Structural outline of classes, methods, and properties | `file_path`, `query` | Symbol tree with kind, line ranges, and identifiers. |
+| `workspace_symbols` | Search symbols across the entire project | `query`, `limit` | Matches with symbol name, kind, file, and position. |
+| `hover` | Inspect signatures, types, and docstrings | `file_path`, `line`, `character` | Markdown-formatted hover information. |
+| `prepare_call_hierarchy` | Verify support and return call hierarchy root item | `file_path`, `line`, `character` | Prepared symbol item for call graphs. |
+| `call_hierarchy` | Find callers (`incoming`) or called functions (`outgoing`) | `file_path`, `line`, `character`, `direction` | List of callers or callee functions. |
+| `get_type_hierarchy` | Inspect base types (`supertypes`) or derived classes (`subtypes`) | `file_path`, `line`, `character`, `direction` | Type inheritance hierarchy. |
+| `lsp_status` | Health status of all servers, workspace root, and errors | *none* | JSON overview of server states (`RUNNING`, `AVAILABLE`, `NOT_INSTALLED`, `CRASHED`), PID, and root. |
 
-*Hinweis:* Zeilen- und Spaltenangaben in allen Tool-Parametern und Rückgaben sind **1-basiert** für eine intuitive Interaktion mit dem Agenten.
+*Note:* All line and column arguments and outputs are **1-indexed** for agent ergonomics.
 
 ---
 
-## 4. Unterstützte Sprachen & Language Server
+## 4. Supported Languages & Language Servers
 
-| Sprache | Primärer Server | Erkannte Dateiendungen | Projekt-Erkennungsmarker |
+| Language | Primary Server | File Extensions | Project Discovery Markers |
 | :--- | :--- | :--- | :--- |
-| **Python** | `pyright-langserver` *(Fallback: `pylsp`, `pyright`)* | `.py`, `.pyi` | `pyproject.toml`, `setup.py`, `requirements.txt` |
+| **Python** | `pyright-langserver` *(Fallbacks: `pylsp`, `pyright`)* | `.py`, `.pyi` | `pyproject.toml`, `setup.py`, `requirements.txt` |
 | **C#** | `csharp-ls` *(Fallback: `roslyn-language-server`)* | `.cs` | `*.sln`, `*.csproj` |
 | **C / C++** | `clangd` *(Fallback: `ccls`)* | `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hxx` | `CMakeLists.txt`, `compile_commands.json` |
 | **TypeScript / JS**| `typescript-language-server` *(Fallback: `vtsls`)* | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | `package.json`, `tsconfig.json` |
 
 ---
 
-## 5. Voraussetzungen
+## 5. Prerequisites
 
-- **Betriebssystem:** Windows 10/11, macOS oder Linux.
-- **Python:** Python 3.9 oder neuer (Python 3.14+ vollständig unterstützt).
-- **Antigravity CLI:** `agy` installiert.
-- Der jeweilige Language Server für die zu bearbeitende Sprache (z. B. `pylsp` oder `pyright` für Python, `clangd` für C++, etc.).
+- **Operating System:** Windows 10/11, macOS, or Linux.
+- **Python:** Python 3.9 or higher (Python 3.14+ fully supported).
+- **Antigravity CLI:** `agy` installed.
+- The corresponding language server for the language you wish to inspect (e.g. `pylsp` or `pyright` for Python, `clangd` for C++, etc.).
 
 ---
 
-## 6. Installation & Schnellstart
+## 6. Installation & Quickstart
 
 ### Windows
 
 ```powershell
-# 1. In das Plugin-Verzeichnis wechseln
-cd path/to/agy-lsp
+# 1. Clone and enter the repository
+git clone git@github-personal:k0pfnicker/agy-lsp.git
+cd agy-lsp
 
-# 2. Virtuelle Umgebung anlegen und Abhängigkeiten installieren
+# 2. Create virtual environment and install dependencies
 python -m venv .venv
 .\.venv\Scripts\pip.exe install -e .
 
-# 3. Optional: Python-LSP-Server für sofortige Python-Unterstützung installieren
+# 3. Optional: Install Python language server for immediate out-of-the-box support
 .\.venv\Scripts\pip.exe install python-lsp-server
 ```
 
 ### Linux / macOS
 
 ```bash
-cd /path/to/AG_LSP_Plugin
+# 1. Clone and enter the repository
+git clone git@github.com:k0pfnicker/agy-lsp.git
+cd agy-lsp
+
+# 2. Create virtual environment and install dependencies
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
+
+# 3. Optional: Install Python language server
 pip install python-lsp-server
 ```
 
 ---
 
-## 7. Einrichtung in Antigravity CLI
+## 7. Integration into Antigravity CLI
 
-Es gibt zwei einfache Möglichkeiten, das Plugin in Antigravity CLI zu registrieren:
+### Option A: As a Discovered Plugin (Recommended)
 
-### Option A: Als Workspace- oder Globales Plugin (Empfohlen)
+The plugin adheres strictly to the official Antigravity plugin manifest specifications (`plugin.json` and `mcp_config.json`).
 
-Das Plugin erfüllt die offizielle Manifest-Spezifikation (`plugin.json` und `mcp_config.json`).
-
-Kopieren oder verlinken Sie das Verzeichnis in Ihren Antigravity-Plugin-Ordner:
+Link or copy the directory into an Antigravity plugin discovery folder:
 - **Global:** `~/.gemini/config/plugins/agy-lsp`
-- **Projekt-spezifisch:** `.agents/plugins/agy-lsp`
+- **Project-Specific:** `.agents/plugins/agy-lsp`
 
-Überprüfen Sie die Gültigkeit mit dem offiziellen CLI-Befehl:
+Validate the plugin with the official CLI command:
 ```bash
 agy plugin validate .
 ```
-Ausgabe:
+Expected output:
 ```text
   [ok]    .
           ✔ skills      : 1 processed
           ✔ mcpServers  : 1 processed
 ```
 
-### Option B: Über die `agy mcp`-Befehlszeile
+### Option B: Via `agy mcp` Command Line
 
-Sie können den MCP-Server auch direkt registrieren:
+Register the server directly using the CLI:
 ```bash
 agy mcp add agy-lsp -- command="python" args=["/path/to/agy-lsp/run_server.py"]
 ```
 
 ---
 
-## 8. Installation der Language Server
+## 8. Language Server Installation
 
-Sollte ein Language Server nicht auf Ihrem System vorhanden sein, liefert das Plugin eine klare, strukturierte Meldung mit der exakten Installationsanweisung:
+If a language server is not installed, the plugin provides a clear, user-friendly error message with actionable installation commands:
 
 ### Python
 ```bash
-# Option 1: python-lsp-server (reines Python, keine Node-Abhängigkeit)
+# Option 1: python-lsp-server (pure Python, no Node.js required)
 pip install python-lsp-server
 
 # Option 2: Pyright
@@ -202,7 +210,7 @@ dotnet tool install -g csharp-ls
 ```
 
 ### C / C++
-- **Windows:** `scoop install llvm` oder `winget install LLVM.LLVM`
+- **Windows:** `scoop install llvm` or `winget install LLVM.LLVM`
 - **macOS:** `brew install llvm`
 - **Linux (Debian/Ubuntu):** `sudo apt-get install clangd`
 
@@ -213,9 +221,9 @@ npm install -g typescript-language-server typescript
 
 ---
 
-## 9. Konfiguration (`agy-lsp.json`)
+## 9. Configuration (`agy-lsp.json`)
 
-Das Plugin funktioniert ohne Konfigurationsdatei mit sicheren Standardwerten. Bei Bedarf kann im Projektstamm oder unter `~/.gemini/config/agy-lsp.json` eine eigene Konfiguration hinterlegt werden:
+`agy-lsp` works out of the box with safe defaults. To customize behavior, place an `agy-lsp.json` file at your workspace root or under `~/.gemini/config/agy-lsp.json`:
 
 ```json
 {
@@ -253,62 +261,62 @@ Das Plugin funktioniert ohne Konfigurationsdatei mit sicheren Standardwerten. Be
 }
 ```
 
-### Konfigurationsparameter im Detail
+### Configuration Options Reference
 
-| Schlüssel | Typ | Standard | Beschreibung |
+| Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `defaultLanguage` | `string` | `"auto"` | Sprache bei unbekannter Dateiendung (`"auto"`, `"python"`, etc.). |
-| `workspaceRoot` | `string \| null` | `null` | Expliziter Workspace-Pfad. Wenn `null`, wird er anhand von `.git`, `.sln` oder `pyproject.toml` ermittelt. |
-| `maxResults` | `integer` | `50` | Maximale Trefferanzahl für Symbollisten, Referenzen und Diagnosen. |
-| `includeCodeSnippets` | `boolean` | `false` | Ob bei Definitionen und Referenzen kurze Code-Kontexte mitgeliefert werden. |
-| `snippetContextLines` | `integer` | `3` | Anzahl der Zeilen vor/nach der Zielposition im Snippet. |
-| `allowOutsideWorkspace` | `boolean` | `false` | **Sicherheitsbarriere:** Verbietet standardmäßig das Öffnen von Pfaden außerhalb des Workspace. |
-| `writeChanges` | `boolean` | `false` | **Schreibschutz:** Erlaubt tatsächliches Schreiben von Änderungen auf die Festplatte (z. B. bei Rename). |
-| `serverStartupTimeoutMs`| `integer` | `15000` | Zeitlimit für den Handshake (`initialize`) des Language Servers. |
-| `requestTimeoutMs` | `integer` | `10000` | Timeout für einzelne JSON-RPC-Anfragen. |
-| `maxRestartAttempts` | `integer` | `2` | Maximale Anzahl automatischer Neustarts bei Absturz des Serverprozesses. |
+| `defaultLanguage` | `string` | `"auto"` | Fallback language for files with unrecognized extensions. |
+| `workspaceRoot` | `string \| null` | `null` | Explicit workspace root. If `null`, discovered automatically via `.git`, `.sln`, etc. |
+| `maxResults` | `integer` | `50` | Maximum number of diagnostics, references, or symbols returned. |
+| `includeCodeSnippets` | `boolean` | `false` | Whether to include code snippets with definition and reference locations. |
+| `snippetContextLines` | `integer` | `3` | Number of context lines before and after target line in snippets. |
+| `allowOutsideWorkspace` | `boolean` | `false` | **Security boundary:** Forbids accessing paths outside the workspace root. |
+| `writeChanges` | `boolean` | `false` | **Write protection:** Enables writing rename refactorings directly to disk. |
+| `serverStartupTimeoutMs`| `integer` | `15000` | Timeout in milliseconds for LSP process initialization handshake. |
+| `requestTimeoutMs` | `integer` | `10000` | Timeout in milliseconds for individual LSP JSON-RPC requests. |
+| `maxRestartAttempts` | `integer` | `2` | Maximum retry attempts when a server process crashes unexpectedly. |
 
 ---
 
-## 10. Token-Effizienz & Kontext-Optimierung
+## 10. Token Efficiency & Context Optimization
 
-Damit der KI-Agent nicht mit riesigen JSON-Nutzlasten überflutet wird, implementiert die Bridge mehrere Token-Schutzmechanismen:
+To prevent context bloat and optimize LLM token consumption, `agy-lsp` incorporates several efficiency mechanisms:
 
-1. **Kein Ausgeben vollständiger Dateien:** Es werden immer nur exakte Positionen oder kleine Kontextfenster (Standard: 3 Zeilen) zurückgegeben.
-2. **Deduplizierung von Diagnosen:** Wiederholte Fehlermeldungen an derselben Code-Stelle werden zusammengefasst.
-3. **Meldungskürzung:** Übermäßig lange Fehlermeldungen von Compilern werden nach 400 Zeichen gekürzt (`... [truncated]`).
-4. **Ergebnisbegrenzung & Paginierung:** Listen von Referenzen oder Workspace-Symbolen sind auf `maxResults` begrenzt und enthalten ein `truncated: true`-Flag mit der Gesamtzahl der Treffer.
-5. **Kompakte Struktur:** Leere optionale Felder (wie `children` ohne Unterelemente) werden weggelassen.
-
----
-
-## 11. Sicherheitsmodell
-
-- **Workspace Confinement:** Alle Pfadangaben in Tool-Aufrufen werden kanonisiert (`resolve()`). Pfade außerhalb des Projektstamms (`workspaceRoot`) werden sofort abgelehnt, es sei denn, `allowOutsideWorkspace: true` wurde explizit gesetzt. Traversal-Attacken (`../../`) werden zuverlässig blockiert.
-- **Keine Shell-Ausführung:** Alle Subprozesse werden direkt über `asyncio.create_subprocess_exec` ohne Shell (`shell=False`) gestartet.
-- **Sichere Allowlist / Konfiguration:** Serverbefehle stammen ausschließlich aus der statischen Konfiguration und niemals aus Parametern des Agenten.
-- **Keine Secrets im Log:** Ein benutzerdefinierter Logger filtert Passwörter, Bearer-Tokens und API-Keys aus Protokollmeldungen.
-- **Stderr-Isolation:** Sämtliche Status- und Debuginformationen fließen ausschließlich über `sys.stderr`, um den Standard-Input/Output für das MCP-Protokoll nicht zu stören.
+1. **No Full File Dumps:** Returns precise coordinates or compact snippets (default: 3 lines context) instead of entire files.
+2. **Diagnostic Deduplication:** Merges redundant diagnostic reports at identical file locations.
+3. **Message Truncation:** Overly verbose compiler error messages are truncated at 400 characters (`... [truncated]`).
+4. **Result Limiting & Pagination:** Result lists are capped at `maxResults` and annotated with a `truncated: true` flag and total count.
+5. **Compact Structure:** Omits empty optional keys and null values.
 
 ---
 
-## 12. Troubleshooting & Diagnose
+## 11. Security Model
 
-### Server-Status überprüfen
-Rufen Sie im Agenten oder per MCP das Tool `lsp_status` auf:
+- **Workspace Confinement:** All file paths are canonicalized (`resolve()`). Accessing files outside the workspace root is rejected unless `allowOutsideWorkspace: true` is set. Path traversal attacks (`../../`) are blocked.
+- **No Shell Execution:** Subprocesses are launched directly using `asyncio.create_subprocess_exec` without a shell (`shell=False`).
+- **Static Command Allowlist:** Server commands are loaded strictly from static configuration or defaults, never from dynamic agent tool arguments.
+- **Secret Redaction:** Stderr logs automatically redact bearer tokens, API keys, and passwords.
+- **Stderr Isolation:** All diagnostic logs are routed strictly to `sys.stderr`, preserving clean JSON-RPC communication on `sys.stdout`.
+
+---
+
+## 12. Troubleshooting & Diagnostics
+
+### Checking Server Health
+Invoke the `lsp_status` tool through the agent or MCP:
 ```json
 {
   "name": "lsp_status",
   "arguments": {}
 }
 ```
-Die Antwort zeigt:
-- Welcher Server für welche Sprache aktiv ist (`RUNNING`),
-- Ob ein Server fehlt (`NOT_INSTALLED`) samt Installationsbefehl,
-- Den aktuellen Workspace-Root und PID des Prozesses.
+Output details:
+- Status per language (`RUNNING`, `AVAILABLE`, `NOT_INSTALLED`, `CRASHED`),
+- Process ID (PID) and workspace root,
+- Detailed error messages and installation advice if a binary is missing.
 
-### Fehlermeldung: "Language server command '...' was not found"
-Installieren Sie den jeweiligen Server gemäß Abschnitt 8 oder tragen Sie den absoluten Pfad zur ausführbaren Datei in `agy-lsp.json` ein:
+### Error: "Language server command '...' was not found"
+Ensure the language server is installed and available in `PATH`, or specify its absolute executable path in `agy-lsp.json`:
 ```json
 {
   "servers": {
@@ -321,61 +329,61 @@ Installieren Sie den jeweiligen Server gemäß Abschnitt 8 oder tragen Sie den a
 
 ---
 
-## 13. Entwicklung, Tests & Qualitätssicherung
+## 13. Development, Testing & QA
 
-### Test-Suite ausführen
+### Running the Test Suite
 
-Die gesamte Testsuite umfasst 37 automatisierte Unit-, Integrations- und End-to-End-Tests:
+The test suite contains 37 automated tests across unit, integration, and end-to-end categories:
 
 ```powershell
-# Alle Tests ausführen
+# Run all tests
 .\.venv\Scripts\pytest.exe -v
 
-# Spezifischen E2E-Test gegen einen echten Language Server ausführen
+# Run the real LSP process E2E test
 .\.venv\Scripts\pytest.exe tests/test_e2e_real_lsp.py -v
 ```
 
-### Linter & Formatter prüfen
+### Linting & Formatting Check
 ```powershell
 .\.venv\Scripts\ruff.exe check .
 .\.venv\Scripts\ruff.exe format --check .
 ```
 
-### Plugin-Validierung
+### Plugin Manifest Validation
 ```powershell
 agy plugin validate .
 ```
 
 ---
 
-## 14. Erweiterung um neue Sprachen
+## 14. Adding New Languages
 
-Um eine neue Sprache (z. B. Rust mit `rust-analyzer` oder Go mit `gopls`) hinzuzufügen:
+To add a new language server (e.g. Rust via `rust-analyzer` or Go via `gopls`):
 
-1. **Dateiendung mappen:** In [`paths.py`](src/agy_lsp/utils/paths.py) in `EXTENSION_LANGUAGE_MAP`:
+1. **Map file extensions:** In [`paths.py`](src/agy_lsp/utils/paths.py) in `EXTENSION_LANGUAGE_MAP`:
    ```python
    ".rs": "rust",
    ".go": "go",
    ```
-2. **Server-Befehl registrieren:** In [`config.py`](src/agy_lsp/config.py) unter `DEFAULT_SERVERS`:
+2. **Register default server:** In [`config.py`](src/agy_lsp/config.py) in `DEFAULT_SERVERS`:
    ```python
    "rust": ServerConfig(command="rust-analyzer", args=[]),
    "go": ServerConfig(command="gopls", args=["serve"]),
    ```
-3. **Installationshinweis ergänzen:** In [`adapters.py`](src/agy_lsp/lsp/adapters.py) in `INSTALL_HINTS`.
+3. **Add installation hint:** In [`adapters.py`](src/agy_lsp/lsp/adapters.py) in `INSTALL_HINTS`.
 
-Alternativ kann jede Sprache auch rein deklarativ in der Projektdatei `agy-lsp.json` ohne Codeänderung eingetragen werden!
-
----
-
-## 15. Bekannte Einschränkungen
-
-- **C# Roslyn:** Auf modernen .NET 10 Preview Runtimes kann `dotnet tool install -g csharp-ls` aufgrund veralteter Paketmanifeste scheitern. In diesem Fall kann der offizielle `Microsoft.CodeAnalysis.LanguageServer` in `agy-lsp.json` hinterlegt werden.
-- **Mehrere Workspace-Ordner:** Derzeit unterstützt die Bridge einen primären Workspace-Root pro Session. Submodule und Unterverzeichnisse innerhalb des Workspace-Roots werden nahtlos unterstützt.
-- **Semantische Makro-Expansion in C/C++:** `clangd` benötigt für optimale Ergebnisse eine `compile_commands.json` (z. B. generiert durch `cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`).
+Alternatively, configure new languages purely declaratively in `agy-lsp.json` without modifying source code!
 
 ---
 
-## Lizenz
+## 15. Known Limitations
 
-Dieses Projekt ist unter der [MIT License](LICENSE) lizenziert.
+- **C# on Modern .NET Previews:** On .NET 10 Preview environments, `dotnet tool install -g csharp-ls` may encounter packaging manifest issues. Configure an alternative Roslyn server path in `agy-lsp.json` if needed.
+- **Multiple Workspace Roots:** The bridge currently targets one primary workspace root per session. Submodules and subfolders within the root are fully supported.
+- **C/C++ Semantic Macro Expansion:** `clangd` yields optimal results when a `compile_commands.json` database is present in the workspace root.
+
+---
+
+## 16. License
+
+This project is licensed under the [MIT License](LICENSE).

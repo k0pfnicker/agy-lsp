@@ -1,0 +1,43 @@
+{
+  "defaultLanguage": "auto",
+  "workspaceRoot": null,
+  "maxResults": 50,
+  "includeCodeSnippets": false,
+  "snippetContextLines": 3,
+  "allowOutsideWorkspace": false,
+  "writeChanges": false,
+  "serverStartupTimeoutMs": 15000,
+  "requestTimeoutMs": 10000,
+  "maxRestartAttempts": 2,
+  "servers": {
+    "csharp": {
+      "command": "csharp-ls",
+      "args": [],
+      "fallbacks": [
+        { "command": "roslyn-language-server", "args": ["--stdio"] }
+      ]
+    },
+    "cpp": {
+      "command": "clangd",
+      "args": ["--background-index"],
+      "fallbacks": [
+        { "command": "ccls", "args": [] }
+      ]
+    },
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "fallbacks": [
+        { "command": "vtsls", "args": ["--stdio"] }
+      ]
+    },
+    "python": {
+      "command": "pyright-langserver",
+      "args": ["--stdio"],
+      "fallbacks": [
+        { "command": "pylsp", "args": [] },
+        { "command": "pyright", "args": ["--langserver"] }
+      ]
+    }
+  }
+}

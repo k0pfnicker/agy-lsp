@@ -97,8 +97,14 @@ def load_config(
     """Load and merge configuration from defaults, user files, and environment."""
     cfg = PluginConfig()
 
-    # 1. Determine workspace root
-    root = find_workspace_root(workspace_dir or os.getcwd())
+    # If custom_path is actually a workspace directory, treat it as workspace_dir
+    if custom_path and Path(custom_path).is_dir() and not workspace_dir:
+        workspace_dir = custom_path
+        custom_path = None
+
+    # 1. Determine workspace root (honoring AGY_LSP_WORKSPACE env var)
+    env_ws = os.environ.get("AGY_LSP_WORKSPACE")
+    root = find_workspace_root(workspace_dir or env_ws or os.getcwd())
     cfg.workspaceRoot = root
 
     # Potential config locations in order of precedence:

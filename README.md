@@ -1,6 +1,7 @@
 # agy-lsp — Language Server Protocol MCP Bridge for Antigravity CLI
 
-[![Tests](https://img.shields.io/badge/tests-37%20passed-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-1.1.0-purple.svg)]()
+[![Tests](https://img.shields.io/badge/tests-39%20passed-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)]()
 [![MCP](https://img.shields.io/badge/MCP-2.0%20%2F%201.0-orange.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -91,18 +92,18 @@ The plugin registers 11 high-performance MCP tools:
 | Tool | Purpose | Key Parameters | Return Value |
 | :--- | :--- | :--- | :--- |
 | `get_diagnostics` | Retrieve compiler errors, warnings, and hints for a file or workspace | `file_path`, `line_start`, `line_end`, `severity`, `limit` | List of deduplicated diagnostics with file, line, column, code, and message. |
-| `go_to_definition` | Jump from a symbol position to its definition/declaration | `file_path`, `line`, `character`, `include_snippet` | Target file, line range, and optional compact code excerpt. |
-| `find_references` | Locate all usages of a symbol across the workspace | `file_path`, `line`, `character`, `include_declaration`, `limit` | List of reference locations across files. |
-| `rename_symbol` | Perform workspace-wide LSP rename refactoring | `file_path`, `line`, `character`, `new_name`, `apply` | **Unified preview diff** across all affected files. Disk writes require `apply=True` and `writeChanges=True`. |
-| `document_symbols` | Structural outline of classes, methods, and properties | `file_path`, `query` | Symbol tree with kind, line ranges, and identifiers. |
+| `go_to_definition` | Jump from a symbol position to its definition/declaration | `file_path`, `line`, `character`, `symbol_name`, `include_snippet` | Target file, line range, and optional compact code excerpt. |
+| `find_references` | Locate all usages of a symbol across the workspace | `file_path`, `line`, `character`, `symbol_name`, `include_declaration`, `limit` | List of reference locations across files. |
+| `rename_symbol` | Perform workspace-wide LSP rename refactoring | `file_path`, `line`, `character`, `new_name`, `apply`, `symbol_name` | **Unified preview diff** across all affected files. Disk writes require `apply=True` and `writeChanges=True`. |
+| `document_symbols` | Structural outline of classes, methods, and properties | `file_path`, `query`, `include_fields`, `max_depth` | Symbol tree with kind, line ranges, and identifiers (struct fields/enum members collapsed into `fields_count` by default). |
 | `workspace_symbols` | Search symbols across the entire project | `query`, `limit` | Matches with symbol name, kind, file, and position. |
-| `hover` | Inspect signatures, types, and docstrings | `file_path`, `line`, `character` | Markdown-formatted hover information. |
-| `prepare_call_hierarchy` | Verify support and return call hierarchy root item | `file_path`, `line`, `character` | Prepared symbol item for call graphs. |
-| `call_hierarchy` | Find callers (`incoming`) or called functions (`outgoing`) | `file_path`, `line`, `character`, `direction` | List of callers or callee functions. |
-| `get_type_hierarchy` | Inspect base types (`supertypes`) or derived classes (`subtypes`) | `file_path`, `line`, `character`, `direction` | Type inheritance hierarchy. |
+| `hover` | Inspect signatures, types, and docstrings | `file_path`, `line`, `character`, `symbol_name` | Markdown-formatted hover information. |
+| `prepare_call_hierarchy` | Verify support and return call hierarchy root item | `file_path`, `line`, `character`, `symbol_name` | Prepared symbol item for call graphs. |
+| `call_hierarchy` | Find callers (`incoming`) or called functions (`outgoing`) | `file_path`, `line`, `character`, `direction`, `symbol_name` | List of callers or callee functions. |
+| `get_type_hierarchy` | Inspect base types (`supertypes`) or derived classes (`subtypes`) | `file_path`, `line`, `character`, `direction`, `symbol_name` | Type inheritance hierarchy. |
 | `lsp_status` | Health status of all servers, workspace root, and errors | *none* | JSON overview of server states (`RUNNING`, `AVAILABLE`, `NOT_INSTALLED`, `CRASHED`), PID, and root. |
 
-*Note:* All line and column arguments and outputs are **1-indexed** for agent ergonomics.
+*Note:* All line and column arguments and outputs are **1-indexed** for agent ergonomics. Position-based tools also automatically snap inaccurate column estimates (`character`) or optional `symbol_name` arguments to the identifier on that line.
 
 ---
 
@@ -111,8 +112,8 @@ The plugin registers 11 high-performance MCP tools:
 | Language | Primary Server | File Extensions | Project Discovery Markers |
 | :--- | :--- | :--- | :--- |
 | **Python** | `pyright-langserver` *(Fallbacks: `pylsp`, `pyright`)* | `.py`, `.pyi` | `pyproject.toml`, `setup.py`, `requirements.txt` |
-| **C#** | `csharp-ls` *(Fallback: `roslyn-language-server`)* | `.cs` | `*.sln`, `*.csproj` |
-| **C / C++** | `clangd` *(Fallback: `ccls`)* | `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hxx` | `CMakeLists.txt`, `compile_commands.json` |
+| **C#** | `csharp-ls` *(Fallback: `roslyn-language-server`)* | `.cs` | `*.sln`, `*.slnx`, `*.csproj` |
+| **C / C++** | `clangd` *(Fallback: `ccls`)* | `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hxx` | `CMakeLists.txt`, `compile_commands.json`, `*.vcxproj` |
 | **TypeScript / JS**| `typescript-language-server` *(Fallback: `vtsls`)* | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | `package.json`, `tsconfig.json` |
 
 ---
@@ -128,48 +129,58 @@ The plugin registers 11 high-performance MCP tools:
 
 ## 6. Installation & Quickstart
 
-### Windows
+### Windows (PowerShell)
 
 ```powershell
 # 1. Clone and enter the repository
-git clone git@github-personal:k0pfnicker/agy-lsp.git
+git clone https://github.com/k0pfnicker/agy-lsp.git
 cd agy-lsp
 
-# 2. Create virtual environment and install dependencies
+# 2. Create virtual environment and install dependencies (note the quotes around ".[dev]" in PowerShell)
 python -m venv .venv
-.\.venv\Scripts\pip.exe install -e .
+.\.venv\Scripts\pip.exe install -e ".[dev]"
 
-# 3. Optional: Install Python language server for immediate out-of-the-box support
-.\.venv\Scripts\pip.exe install python-lsp-server
+# 3. Optional: Install Python & C/C++ language servers directly into .venv (no admin rights required)
+.\.venv\Scripts\pip.exe install python-lsp-server clangd
+
+# 4. Run one-step workspace & MCP setup
+.\.venv\Scripts\python.exe setup_agy.py --workspace D:\YourProject
 ```
 
 ### Linux / macOS
 
 ```bash
 # 1. Clone and enter the repository
-git clone git@github.com:k0pfnicker/agy-lsp.git
+git clone https://github.com/k0pfnicker/agy-lsp.git
 cd agy-lsp
 
 # 2. Create virtual environment and install dependencies
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 
-# 3. Optional: Install Python language server
-pip install python-lsp-server
+# 3. Optional: Install Python & C/C++ language servers
+pip install python-lsp-server clangd
+
+# 4. Run one-step workspace & MCP setup
+python setup_agy.py --workspace /path/to/your/project
 ```
 
 ---
 
 ## 7. Integration into Antigravity CLI
 
-### Option A: As a Discovered Plugin (Recommended)
+### Option A: Automated Setup via `setup_agy.py` (Recommended)
 
-The plugin adheres strictly to the official Antigravity plugin manifest specifications (`plugin.json` and `mcp_config.json`).
+Running `python setup_agy.py --workspace <path>` automatically:
+1. Detects the exact absolute path to `.venv/Scripts/agy-lsp` and `.venv/Scripts` (so language servers installed inside `.venv` are found automatically without modifying your global system `PATH`).
+2. Registers `agy-lsp` in `~/.gemini/config/mcp_config.json`.
+3. Installs the `SKILL.md` into `<workspace>/.agents/skills/agy-lsp/SKILL.md` without creating duplicate plugin MCP server entries.
 
-Link or copy the directory into an Antigravity plugin discovery folder:
-- **Global:** `~/.gemini/config/plugins/agy-lsp`
-- **Project-Specific:** `.agents/plugins/agy-lsp`
+### Option B: As a Discovered Plugin
+
+The plugin also adheres to the official Antigravity plugin manifest specifications (`plugin.json` and `mcp_config.json`).
+*(Note: Do not register both `~/.gemini/config/mcp_config.json` and `.agents/plugins/agy-lsp/mcp_config.json` simultaneously, or Antigravity will list two MCP server instances `agy-lsp` and `agy-lsp_agy-lsp`.)*
 
 Validate the plugin with the official CLI command:
 ```bash
@@ -182,18 +193,11 @@ Expected output:
           ✔ mcpServers  : 1 processed
 ```
 
-### Option B: Via `agy mcp` Command Line
-
-Register the server directly using the CLI:
-```bash
-agy mcp add agy-lsp -- command="python" args=["/path/to/agy-lsp/run_server.py"]
-```
-
 ---
 
 ## 8. Language Server Installation
 
-If a language server is not installed, the plugin provides a clear, user-friendly error message with actionable installation commands:
+If a language server is not installed, the plugin provides a clear, user-friendly error message with actionable installation commands. Executables installed inside the same `.venv` are discovered automatically:
 
 ### Python
 ```bash
@@ -210,6 +214,7 @@ dotnet tool install -g csharp-ls
 ```
 
 ### C / C++
+- **Python Wheel (Windows / Linux / macOS, no admin rights required):** `pip install clangd`
 - **Windows:** `scoop install llvm` or `winget install LLVM.LLVM`
 - **macOS:** `brew install llvm`
 - **Linux (Debian/Ubuntu):** `sudo apt-get install clangd`

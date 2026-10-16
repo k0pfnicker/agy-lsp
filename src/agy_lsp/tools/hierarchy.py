@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from agy_lsp.config import PluginConfig
 from agy_lsp.lsp.manager import LspManager
@@ -43,6 +43,7 @@ async def prepare_call_hierarchy_tool(
     file_path: str,
     line: int,
     character: int,
+    symbol_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Prepare a call hierarchy item at the given position.
 
@@ -50,6 +51,7 @@ async def prepare_call_hierarchy_tool(
         file_path: Path to the target source file.
         line: 1-indexed line number.
         character: 1-indexed column number.
+        symbol_name: Optional symbol identifier name on that line to auto-snap column offset.
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -61,7 +63,10 @@ async def prepare_call_hierarchy_tool(
         return {"error": f"File not found: '{file_path}'"}
 
     client = await manager.get_client_for_file(norm_path)
-    res = await client.prepare_call_hierarchy(norm_path, line, character)
+    if symbol_name is not None:
+        res = await client.prepare_call_hierarchy(norm_path, line, character, symbol_name=symbol_name)
+    else:
+        res = await client.prepare_call_hierarchy(norm_path, line, character)
 
     if not res:
         return {"items": [], "message": f"No call hierarchy item at {file_path}:{line}:{character}"}
@@ -79,6 +84,7 @@ async def call_hierarchy_tool(
     line: int,
     character: int,
     direction: str = "incoming",
+    symbol_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Inspect callers (incoming) or called functions (outgoing) from a symbol position.
 
@@ -87,6 +93,7 @@ async def call_hierarchy_tool(
         line: 1-indexed line number.
         character: 1-indexed column number.
         direction: Either 'incoming' (callers) or 'outgoing' (functions called by this symbol).
+        symbol_name: Optional symbol identifier name on that line to auto-snap column offset.
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -98,7 +105,10 @@ async def call_hierarchy_tool(
         return {"error": f"File not found: '{file_path}'"}
 
     client = await manager.get_client_for_file(norm_path)
-    prep_res = await client.prepare_call_hierarchy(norm_path, line, character)
+    if symbol_name is not None:
+        prep_res = await client.prepare_call_hierarchy(norm_path, line, character, symbol_name=symbol_name)
+    else:
+        prep_res = await client.prepare_call_hierarchy(norm_path, line, character)
 
     if not prep_res:
         return {"calls": [], "message": "Symbol does not support call hierarchy."}
@@ -144,6 +154,7 @@ async def get_type_hierarchy_tool(
     line: int,
     character: int,
     direction: str = "supertypes",
+    symbol_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Retrieve supertypes (base classes/interfaces) or subtypes (derived types) for a type.
 
@@ -152,6 +163,7 @@ async def get_type_hierarchy_tool(
         line: 1-indexed line number.
         character: 1-indexed column number.
         direction: Either 'supertypes' (base classes) or 'subtypes' (inheriting classes).
+        symbol_name: Optional symbol identifier name on that line to auto-snap column offset.
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -163,7 +175,10 @@ async def get_type_hierarchy_tool(
         return {"error": f"File not found: '{file_path}'"}
 
     client = await manager.get_client_for_file(norm_path)
-    prep_res = await client.prepare_type_hierarchy(norm_path, line, character)
+    if symbol_name is not None:
+        prep_res = await client.prepare_type_hierarchy(norm_path, line, character, symbol_name=symbol_name)
+    else:
+        prep_res = await client.prepare_type_hierarchy(norm_path, line, character)
 
     if not prep_res:
         return {"types": [], "message": "Type hierarchy not supported or symbol is not a type."}

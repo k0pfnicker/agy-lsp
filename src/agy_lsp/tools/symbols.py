@@ -16,22 +16,58 @@ from agy_lsp.utils.paths import (
 )
 
 
-def _format_symbol_node(node: dict[str, Any], query: Optional[str] = None) -> Optional[dict[str, Any]]:
+_LEAF_MEMBER_KINDS = {8, 22}  # Field (8), EnumMember (22)
+
+
+def _format_symbol_node(
+    node: dict[str, Any],
+    query: Optional[str] = None,
+    include_fields: bool = False,
+    max_depth: int = 2,
+    _depth: int = 1,
+) -> Optional[dict[str, Any]]:
     """Format an LSP DocumentSymbol or SymbolInformation into a compact dictionary."""
     name = node.get("name", "")
+    raw_children = node.get("children", [])
+
+    # Filter out leaf struct fields / enum members unless include_fields=True or query is provided
+    if not include_fields and not query:
+        filtered_children = [
+            c for c in raw_children if isinstance(c, dict) and c.get("kind", 0) not in _LEAF_MEMBER_KINDS
+        ]
+        omitted_fields = len(raw_children) - len(filtered_children)
+    else:
+        filtered_children = [c for c in raw_children if isinstance(c, dict)]
+        omitted_fields = 0
+
+    can_recurse = _depth < max_depth or bool(query)
+
     if query and query.lower() not in name.lower():
         # Check if any children match before discarding
-        children = node.get("children", [])
         formatted_children = []
-        for child in children:
-            fc = _format_symbol_node(child, query)
-            if fc:
-                formatted_children.append(fc)
+        if can_recurse:
+            for child in filtered_children:
+                fc = _format_symbol_node(
+                    child, query=query, include_fields=include_fields, max_depth=max_depth, _depth=_depth + 1
+                )
+                if fc:
+                    formatted_children.append(fc)
         if not formatted_children:
             return None
     else:
-        children = node.get("children", [])
-        formatted_children = [fc for c in children if (fc := _format_symbol_node(c, query)) is not None]
+        if can_recurse:
+            formatted_children = [
+                fc
+                for c in filtered_children
+                if (
+                    fc := _format_symbol_node(
+                        c, query=query, include_fields=include_fields, max_depth=max_depth, _depth=_depth + 1
+                    )
+                )
+                is not None
+            ]
+        else:
+            formatted_children = []
 
     kind_int = node.get("kind", 0)
     kind_name = format_symbol_kind(kind_int)
@@ -59,6 +95,11 @@ def _format_symbol_node(node: dict[str, Any], query: Optional[str] = None) -> Op
 
     if formatted_children:
         res["children"] = formatted_children
+    elif raw_children and not can_recurse:
+        res["children_count"] = len(raw_children)
+
+    if omitted_fields > 0:
+        res["fields_count"] = omitted_fields
 
     return res
 
@@ -68,12 +109,16 @@ async def document_symbols_tool(
     config: PluginConfig,
     file_path: str,
     query: Optional[str] = None,
+    include_fields: bool = False,
+    max_depth: int = 2,
 ) -> dict[str, Any]:
     """List classes, methods, properties, and symbols in a document.
 
     Args:
         file_path: Path to the target source file.
         query: Optional string to filter symbols by name.
+        include_fields: If True, include struct fields and enum members (omitted by default to save tokens).
+        max_depth: Maximum symbol nesting depth to expand (default: 2).
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -93,7 +138,12 @@ async def document_symbols_tool(
     formatted = []
     for item in raw_symbols:
         if isinstance(item, dict):
-            node = _format_symbol_node(item, query)
+            node = _format_symbol_node(
+                item,
+                query=query,
+                include_fields=include_fields,
+                max_depth=max(1, max_depth),
+            )
             if node:
                 formatted.append(node)
 

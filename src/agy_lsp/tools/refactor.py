@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from agy_lsp.config import PluginConfig
 from agy_lsp.lsp.manager import LspManager
@@ -69,6 +69,7 @@ async def rename_symbol_tool(
     character: int,
     new_name: str,
     apply: bool = False,
+    symbol_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Perform an LSP rename on a symbol, generating a preview diff before writing changes.
 
@@ -78,6 +79,7 @@ async def rename_symbol_tool(
         character: 1-indexed column number.
         new_name: The new identifier name.
         apply: Whether to actually write the modifications to disk. Default is False (preview only).
+        symbol_name: Optional symbol identifier name on that line to auto-snap column offset.
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -89,7 +91,10 @@ async def rename_symbol_tool(
         return {"error": f"File not found: '{file_path}'"}
 
     client = await manager.get_client_for_file(norm_path)
-    workspace_edit = await client.rename_symbol(norm_path, line, character, new_name)
+    if symbol_name is not None:
+        workspace_edit = await client.rename_symbol(norm_path, line, character, new_name, symbol_name=symbol_name)
+    else:
+        workspace_edit = await client.rename_symbol(norm_path, line, character, new_name)
 
     if not workspace_edit or not isinstance(workspace_edit, dict):
         return {"error": f"No rename edits proposed by language server for symbol at {file_path}:{line}:{character}"}

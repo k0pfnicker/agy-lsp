@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from agy_lsp.config import PluginConfig
+from agy_lsp.utils.paths import find_compile_commands_dir
 
 
 @dataclass
@@ -34,9 +36,10 @@ INSTALL_HINTS: dict[str, str] = {
     "cpp": (
         "C/C++ Language Server (clangd) is not installed or not in PATH.\n"
         "To install clangd:\n"
-        "  - Windows: scoop install llvm (or winget install LLVM.LLVM)\n"
-        "  - macOS: brew install llvm\n"
-        "  - Linux: sudo apt install clangd (or dnf install clang-tools-extra)"
+        "  - Python/.venv (fastest, ~18 MB): pip install clangd\n"
+        "  - Windows: pip install clangd (or scoop install llvm / winget install LLVM.LLVM)\n"
+        "  - macOS: brew install llvm (or pip install clangd)\n"
+        "  - Linux: sudo apt install clangd (or pip install clangd)"
     ),
     "typescript": (
         "TypeScript/JavaScript Language Server is not installed or not in PATH.\n"
@@ -46,29 +49,40 @@ INSTALL_HINTS: dict[str, str] = {
     "python": (
         "Python Language Server is not installed or not in PATH.\n"
         "To install:\n"
-        "  - pyright: npm install -g pyright (or pip install pyright)\n"
-        "  - python-lsp-server: pip install python-lsp-server"
+        "  - python-lsp-server: pip install python-lsp-server\n"
+        "  - pyright: pip install pyright (or npm install -g pyright)"
     ),
 }
 
 
 def find_executable(name: str) -> Optional[str]:
-    """Find an executable in PATH, local .venv, or direct filesystem path."""
+    """Find an executable in PATH, active Python environment, local .venv, or direct filesystem path."""
     # 1. Direct path or file
     if os.path.isfile(name):
         return os.path.abspath(name)
 
-    # 2. Check virtual environment Scripts/bin relative to current directory or plugin
+    # 2. Check active Python environment (sys.executable / sys.prefix) and .venv folders
     venv_dir = os.environ.get("VIRTUAL_ENV")
-    candidates = []
-    if venv_dir:
-        candidates.append(Path(venv_dir))
-    candidates.append(Path.cwd() / ".venv")
-    candidates.append(Path(__file__).resolve().parent.parent.parent.parent / ".venv")
+    script_dirs: list[Path] = []
 
-    for venv in candidates:
+    # Active interpreter's Scripts/bin folder (works even when launched without activating venv)
+    if sys.executable:
+        script_dirs.append(Path(sys.executable).resolve().parent)
+    if sys.prefix:
+        script_dirs.append(Path(sys.prefix).resolve() / ("Scripts" if os.name == "nt" else "bin"))
+
+    venv_candidates = []
+    if venv_dir:
+        venv_candidates.append(Path(venv_dir))
+    venv_candidates.append(Path.cwd() / ".venv")
+    venv_candidates.append(Path(__file__).resolve().parent.parent.parent.parent / ".venv")
+
+    for venv in venv_candidates:
         if venv.is_dir():
-            script_dir = venv / ("Scripts" if os.name == "nt" else "bin")
+            script_dirs.append(venv / ("Scripts" if os.name == "nt" else "bin"))
+
+    for script_dir in script_dirs:
+        if script_dir.is_dir():
             for ext in ("", ".exe", ".cmd", ".bat"):
                 target = script_dir / f"{name}{ext}"
                 if target.is_file():
@@ -89,7 +103,23 @@ def find_executable(name: str) -> Optional[str]:
     return None
 
 
-def resolve_language_server(language: str, config: PluginConfig) -> AdapterResolution:
+def _augment_cpp_args(args: list[str], config: PluginConfig, target_file: Optional[str] = None) -> list[str]:
+    """Automatically append --compile-commands-dir for clangd if compile_commands.json is in a subdirectory."""
+    final_args = list(args)
+    if any(a.startswith("--compile-commands-dir") for a in final_args):
+        return final_args
+
+    cc_dir = find_compile_commands_dir(target_file, config.workspaceRoot)
+    if cc_dir:
+        final_args.append(f"--compile-commands-dir={cc_dir}")
+    return final_args
+
+
+def resolve_language_server(
+    language: str,
+    config: PluginConfig,
+    target_file: Optional[str] = None,
+) -> AdapterResolution:
     """Resolve the executable and arguments for a language according to configuration and fallbacks."""
     srv_cfg = config.servers.get(language)
     if not srv_cfg:
@@ -106,10 +136,11 @@ def resolve_language_server(language: str, config: PluginConfig) -> AdapterResol
     # Try primary command
     primary_exe = find_executable(srv_cfg.command)
     if primary_exe:
+        args = _augment_cpp_args(srv_cfg.args, config, target_file) if language == "cpp" else list(srv_cfg.args)
         return AdapterResolution(
             language=language,
             command=primary_exe,
-            args=list(srv_cfg.args),
+            args=args,
             env=dict(srv_cfg.env),
             is_available=True,
         )
@@ -120,10 +151,13 @@ def resolve_language_server(language: str, config: PluginConfig) -> AdapterResol
         if fb_cmd:
             fb_exe = find_executable(fb_cmd)
             if fb_exe:
+                fb_args = list(fb.get("args", []))
+                if language == "cpp" and "clangd" in Path(fb_exe).name.lower():
+                    fb_args = _augment_cpp_args(fb_args, config, target_file)
                 return AdapterResolution(
                     language=language,
                     command=fb_exe,
-                    args=list(fb.get("args", [])),
+                    args=fb_args,
                     env=dict(srv_cfg.env),
                     is_available=True,
                 )

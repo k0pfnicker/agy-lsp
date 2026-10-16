@@ -65,9 +65,11 @@ class LspManager:
                 raise ValueError(
                     f"Could not determine programming language for file: '{file_path}' (unrecognized extension)."
                 )
-        return await self.get_client_for_language(lang)
+        return await self.get_client_for_language(lang, target_file=file_path)
 
-    async def get_client_for_language(self, language: str) -> LspClient:
+    async def get_client_for_language(
+        self, language: str, target_file: Optional[str] = None
+    ) -> LspClient:
         """Get or lazily start an LspClient for the given language."""
         async with self._lock:
             existing = self._clients.get(language)
@@ -90,7 +92,7 @@ class LspManager:
                 self._clients.pop(language, None)
 
             # Resolve server executable
-            resolution = resolve_language_server(language, self.config)
+            resolution = resolve_language_server(language, self.config, target_file=target_file)
             if not resolution.is_available:
                 raise LanguageServerNotAvailableError(
                     language=language,

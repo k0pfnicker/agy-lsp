@@ -43,7 +43,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
 
     app = MCPServer(
         name="agy-lsp",
-        version="1.0.0",
+        version="1.1.0",
         description="Language Server Protocol (LSP) Bridge for Antigravity CLI. Provides diagnostics, definitions, references, hover, symbols, call hierarchy, and safe renaming.",
     )
 
@@ -92,6 +92,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         line: int,
         character: int,
         include_snippet: Optional[bool] = None,
+        symbol_name: Optional[str] = None,
     ) -> dict[str, Any]:
         """Go to definition of a symbol at line:character (1-indexed)."""
         try:
@@ -102,6 +103,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 line=line,
                 character=character,
                 include_snippet=include_snippet,
+                symbol_name=symbol_name,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}
@@ -124,6 +126,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         include_declaration: bool = False,
         limit: Optional[int] = None,
         include_snippet: Optional[bool] = None,
+        symbol_name: Optional[str] = None,
     ) -> dict[str, Any]:
         """Find references to a symbol at line:character (1-indexed)."""
         try:
@@ -136,6 +139,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 include_declaration=include_declaration,
                 limit=limit,
                 include_snippet=include_snippet,
+                symbol_name=symbol_name,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}
@@ -158,6 +162,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         character: int,
         new_name: str,
         apply: bool = False,
+        symbol_name: Optional[str] = None,
     ) -> dict[str, Any]:
         """Rename a symbol and preview/apply workspace changes."""
         try:
@@ -169,6 +174,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 character=character,
                 new_name=new_name,
                 apply=apply,
+                symbol_name=symbol_name,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}
@@ -181,12 +187,15 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         name="document_symbols",
         description=(
             "Retrieve outline of classes, methods, functions, and properties in a file. "
-            "Use to quickly understand file architecture without reading all lines."
+            "Use to quickly understand file architecture without reading all lines. "
+            "Struct fields and enum members are collapsed into 'fields_count' by default unless include_fields=True."
         ),
     )
     async def document_symbols(
         file_path: str,
         query: Optional[str] = None,
+        include_fields: bool = False,
+        max_depth: int = 2,
     ) -> dict[str, Any]:
         """List symbols in a document, optionally filtering by name."""
         try:
@@ -195,6 +204,8 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 config=cfg,
                 file_path=file_path,
                 query=query,
+                include_fields=include_fields,
+                max_depth=max_depth,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}
@@ -240,6 +251,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         file_path: str,
         line: int,
         character: int,
+        symbol_name: Optional[str] = None,
     ) -> dict[str, Any]:
         """Hover over symbol to get documentation and type info."""
         try:
@@ -249,6 +261,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 file_path=file_path,
                 line=line,
                 character=character,
+                symbol_name=symbol_name,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}
@@ -267,6 +280,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         file_path: str,
         line: int,
         character: int,
+        symbol_name: Optional[str] = None,
     ) -> dict[str, Any]:
         """Prepare call hierarchy item for a symbol."""
         try:
@@ -276,6 +290,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 file_path=file_path,
                 line=line,
                 character=character,
+                symbol_name=symbol_name,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}
@@ -296,6 +311,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         line: int,
         character: int,
         direction: str = "incoming",
+        symbol_name: Optional[str] = None,
     ) -> dict[str, Any]:
         """Find callers (incoming) or called functions (outgoing)."""
         try:
@@ -306,6 +322,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 line=line,
                 character=character,
                 direction=direction,
+                symbol_name=symbol_name,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}
@@ -326,6 +343,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
         line: int,
         character: int,
         direction: str = "supertypes",
+        symbol_name: Optional[str] = None,
     ) -> dict[str, Any]:
         """Inspect inheritance hierarchy (supertypes or subtypes)."""
         try:
@@ -336,6 +354,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
                 line=line,
                 character=character,
                 direction=direction,
+                symbol_name=symbol_name,
             )
         except LanguageServerNotAvailableError as e:
             return {"error": e.reason, "language": e.language, "install_hint": e.install_hint}

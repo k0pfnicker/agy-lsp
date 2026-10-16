@@ -11,6 +11,10 @@ from typing import Any, Optional
 from agy_lsp.config import PluginConfig
 from agy_lsp.lsp.protocol import encode_lsp_message
 from agy_lsp.lsp.sync import DocumentManager
+from agy_lsp.utils.formatting import (
+    find_alternative_columns_on_line,
+    resolve_symbol_position,
+)
 from agy_lsp.utils.logging import get_logger
 from agy_lsp.utils.paths import normalize_path, path_to_uri
 
@@ -44,6 +48,7 @@ class LspClient:
 
         # Cache published diagnostics: uri -> list of LSP diagnostic objects
         self.diagnostics_cache: dict[str, list[dict[str, Any]]] = {}
+        self._diagnostics_events: dict[str, asyncio.Event] = {}
         self.server_capabilities: dict[str, Any] = {}
         self.last_error: Optional[str] = None
         self._is_initialized = False
@@ -294,6 +299,8 @@ class LspClient:
             diagnostics = params.get("diagnostics", [])
             if uri:
                 self.diagnostics_cache[uri] = diagnostics
+                ev = self._diagnostics_events.setdefault(uri, asyncio.Event())
+                ev.set()
                 logger.debug(f"Received {len(diagnostics)} diagnostics for {uri}")
         elif method in ("window/showMessage", "window/logMessage"):
             msg = params.get("message", "")
@@ -350,10 +357,12 @@ class LspClient:
         """Ensure file is read and synchronized with the language server."""
         action, doc, payload = self.doc_manager.prepare_sync(file_path)
         if action == "open" and payload:
+            self._diagnostics_events[doc.uri] = asyncio.Event()
             await self.send_notification("textDocument/didOpen", payload)
             # Give server a brief moment to process open
             await asyncio.sleep(0.05)
         elif action == "change" and payload:
+            self._diagnostics_events[doc.uri] = asyncio.Event()
             await self.send_notification("textDocument/didChange", payload)
             await asyncio.sleep(0.05)
         return doc.uri
@@ -364,8 +373,14 @@ class LspClient:
             norm = normalize_path(file_path)
             uri = path_to_uri(norm)
             await self.ensure_file_synced(norm)
-            # Wait briefly to let server publish diagnostics
-            await asyncio.sleep(0.2)
+            ev = self._diagnostics_events.get(uri)
+            if ev and not ev.is_set():
+                try:
+                    await asyncio.wait_for(ev.wait(), timeout=0.8)
+                except asyncio.TimeoutError:
+                    pass
+            elif uri not in self.diagnostics_cache:
+                await asyncio.sleep(0.2)
             return list(self.diagnostics_cache.get(uri, []))
 
         # Whole workspace
@@ -374,14 +389,57 @@ class LspClient:
             results.extend(diags)
         return results
 
-    async def get_definition(self, file_path: str, line_1idx: int, character_1idx: int) -> Any:
+    async def _request_with_position_fallback(
+        self,
+        method: str,
+        file_path: str,
+        line_1idx: int,
+        character_1idx: int,
+        symbol_name: Optional[str] = None,
+        extra_params: Optional[dict[str, Any]] = None,
+    ) -> Any:
+        """Send a position-based LSP request with smart column snapping and retry on empty result."""
         norm = normalize_path(file_path)
         uri = await self.ensure_file_synced(norm)
-        params = {
-            "textDocument": {"uri": uri},
-            "position": {"line": line_1idx - 1, "character": character_1idx - 1},
-        }
-        return await self.send_request("textDocument/definition", params)
+        resolved_line, resolved_col = resolve_symbol_position(
+            norm, line_1idx, character_1idx, symbol_name=symbol_name
+        )
+
+        def _build_params(col_1idx: int) -> dict[str, Any]:
+            p: dict[str, Any] = {
+                "textDocument": {"uri": uri},
+                "position": {"line": max(0, resolved_line - 1), "character": max(0, col_1idx - 1)},
+            }
+            if extra_params:
+                p.update(extra_params)
+            return p
+
+        result = await self.send_request(method, _build_params(resolved_col))
+        if result:
+            return result
+
+        # If empty/None and no explicit symbol_name forced a specific match, try alternative identifiers on the line
+        for alt_col in find_alternative_columns_on_line(norm, resolved_line, resolved_col)[:3]:
+            alt_result = await self.send_request(method, _build_params(alt_col))
+            if alt_result:
+                return alt_result
+
+        return result
+
+    async def get_definition(
+        self,
+        file_path: str,
+        line_1idx: int,
+        character_1idx: int,
+        symbol_name: Optional[str] = None,
+    ) -> Any:
+        return await self._request_with_position_fallback(
+            "textDocument/definition",
+            file_path,
+            line_1idx,
+            character_1idx,
+            symbol_name=symbol_name,
+        )
 
     async def get_references(
         self,
@@ -389,24 +447,31 @@ class LspClient:
         line_1idx: int,
         character_1idx: int,
         include_declaration: bool = False,
+        symbol_name: Optional[str] = None,
     ) -> Any:
-        norm = normalize_path(file_path)
-        uri = await self.ensure_file_synced(norm)
-        params = {
-            "textDocument": {"uri": uri},
-            "position": {"line": line_1idx - 1, "character": character_1idx - 1},
-            "context": {"includeDeclaration": include_declaration},
-        }
-        return await self.send_request("textDocument/references", params)
+        return await self._request_with_position_fallback(
+            "textDocument/references",
+            file_path,
+            line_1idx,
+            character_1idx,
+            symbol_name=symbol_name,
+            extra_params={"context": {"includeDeclaration": include_declaration}},
+        )
 
-    async def get_hover(self, file_path: str, line_1idx: int, character_1idx: int) -> Any:
-        norm = normalize_path(file_path)
-        uri = await self.ensure_file_synced(norm)
-        params = {
-            "textDocument": {"uri": uri},
-            "position": {"line": line_1idx - 1, "character": character_1idx - 1},
-        }
-        return await self.send_request("textDocument/hover", params)
+    async def get_hover(
+        self,
+        file_path: str,
+        line_1idx: int,
+        character_1idx: int,
+        symbol_name: Optional[str] = None,
+    ) -> Any:
+        return await self._request_with_position_fallback(
+            "textDocument/hover",
+            file_path,
+            line_1idx,
+            character_1idx,
+            symbol_name=symbol_name,
+        )
 
     async def get_document_symbols(self, file_path: str) -> Any:
         norm = normalize_path(file_path)
@@ -418,24 +483,37 @@ class LspClient:
         params = {"query": query}
         return await self.send_request("workspace/symbol", params)
 
-    async def rename_symbol(self, file_path: str, line_1idx: int, character_1idx: int, new_name: str) -> Any:
-        norm = normalize_path(file_path)
-        uri = await self.ensure_file_synced(norm)
-        params = {
-            "textDocument": {"uri": uri},
-            "position": {"line": line_1idx - 1, "character": character_1idx - 1},
-            "newName": new_name,
-        }
-        return await self.send_request("textDocument/rename", params)
+    async def rename_symbol(
+        self,
+        file_path: str,
+        line_1idx: int,
+        character_1idx: int,
+        new_name: str,
+        symbol_name: Optional[str] = None,
+    ) -> Any:
+        return await self._request_with_position_fallback(
+            "textDocument/rename",
+            file_path,
+            line_1idx,
+            character_1idx,
+            symbol_name=symbol_name,
+            extra_params={"newName": new_name},
+        )
 
-    async def prepare_call_hierarchy(self, file_path: str, line_1idx: int, character_1idx: int) -> Any:
-        norm = normalize_path(file_path)
-        uri = await self.ensure_file_synced(norm)
-        params = {
-            "textDocument": {"uri": uri},
-            "position": {"line": line_1idx - 1, "character": character_1idx - 1},
-        }
-        return await self.send_request("textDocument/prepareCallHierarchy", params)
+    async def prepare_call_hierarchy(
+        self,
+        file_path: str,
+        line_1idx: int,
+        character_1idx: int,
+        symbol_name: Optional[str] = None,
+    ) -> Any:
+        return await self._request_with_position_fallback(
+            "textDocument/prepareCallHierarchy",
+            file_path,
+            line_1idx,
+            character_1idx,
+            symbol_name=symbol_name,
+        )
 
     async def call_hierarchy_incoming(self, item: dict[str, Any]) -> Any:
         return await self.send_request("callHierarchy/incomingCalls", {"item": item})
@@ -443,14 +521,20 @@ class LspClient:
     async def call_hierarchy_outgoing(self, item: dict[str, Any]) -> Any:
         return await self.send_request("callHierarchy/outgoingCalls", {"item": item})
 
-    async def prepare_type_hierarchy(self, file_path: str, line_1idx: int, character_1idx: int) -> Any:
-        norm = normalize_path(file_path)
-        uri = await self.ensure_file_synced(norm)
-        params = {
-            "textDocument": {"uri": uri},
-            "position": {"line": line_1idx - 1, "character": character_1idx - 1},
-        }
-        return await self.send_request("textDocument/prepareTypeHierarchy", params)
+    async def prepare_type_hierarchy(
+        self,
+        file_path: str,
+        line_1idx: int,
+        character_1idx: int,
+        symbol_name: Optional[str] = None,
+    ) -> Any:
+        return await self._request_with_position_fallback(
+            "textDocument/prepareTypeHierarchy",
+            file_path,
+            line_1idx,
+            character_1idx,
+            symbol_name=symbol_name,
+        )
 
     async def type_hierarchy_supertypes(self, item: dict[str, Any]) -> Any:
         return await self.send_request("typeHierarchy/supertypes", {"item": item})

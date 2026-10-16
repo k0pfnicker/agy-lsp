@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from agy_lsp.config import PluginConfig
 from agy_lsp.lsp.manager import LspManager
@@ -49,6 +49,7 @@ async def hover_tool(
     file_path: str,
     line: int,
     character: int,
+    symbol_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Retrieve type information, function signatures, and docstrings at a specific position.
 
@@ -56,6 +57,7 @@ async def hover_tool(
         file_path: Path to the target source file.
         line: 1-indexed line number.
         character: 1-indexed column number.
+        symbol_name: Optional symbol identifier name on that line to auto-snap column offset.
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -67,7 +69,10 @@ async def hover_tool(
         return {"error": f"File not found: '{file_path}'"}
 
     client = await manager.get_client_for_file(norm_path)
-    res = await client.get_hover(norm_path, line, character)
+    if symbol_name is not None:
+        res = await client.get_hover(norm_path, line, character, symbol_name=symbol_name)
+    else:
+        res = await client.get_hover(norm_path, line, character)
 
     if not res or not isinstance(res, dict):
         return {

@@ -44,6 +44,7 @@ async def go_to_definition_tool(
     line: int,
     character: int,
     include_snippet: Optional[bool] = None,
+    symbol_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Jump from a symbol position to its definition.
 
@@ -52,6 +53,7 @@ async def go_to_definition_tool(
         line: 1-indexed line number where the symbol is located.
         character: 1-indexed column number of the symbol.
         include_snippet: If True, include a compact code excerpt around the definition target.
+        symbol_name: Optional symbol identifier name on that line to auto-snap column offset.
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -63,7 +65,10 @@ async def go_to_definition_tool(
         return {"error": f"File not found: '{file_path}'"}
 
     client = await manager.get_client_for_file(norm_path)
-    raw_res = await client.get_definition(norm_path, line, character)
+    if symbol_name is not None:
+        raw_res = await client.get_definition(norm_path, line, character, symbol_name=symbol_name)
+    else:
+        raw_res = await client.get_definition(norm_path, line, character)
 
     if not raw_res:
         return {
@@ -119,6 +124,7 @@ async def find_references_tool(
     include_declaration: bool = False,
     limit: Optional[int] = None,
     include_snippet: Optional[bool] = None,
+    symbol_name: Optional[str] = None,
 ) -> dict[str, Any]:
     """Find all references to a symbol across the workspace.
 
@@ -129,6 +135,7 @@ async def find_references_tool(
         include_declaration: Whether to include the symbol's declaration itself in the results.
         limit: Maximum number of reference items to return.
         include_snippet: Whether to include code snippets around each reference.
+        symbol_name: Optional symbol identifier name on that line to auto-snap column offset.
     """
     workspace_root = config.workspaceRoot or normalize_path(".")
     norm_path = normalize_path(file_path)
@@ -140,7 +147,12 @@ async def find_references_tool(
         return {"error": f"File not found: '{file_path}'"}
 
     client = await manager.get_client_for_file(norm_path)
-    raw_res = await client.get_references(norm_path, line, character, include_declaration=include_declaration)
+    if symbol_name is not None:
+        raw_res = await client.get_references(
+            norm_path, line, character, include_declaration=include_declaration, symbol_name=symbol_name
+        )
+    else:
+        raw_res = await client.get_references(norm_path, line, character, include_declaration=include_declaration)
 
     if not raw_res:
         return {"references": [], "count": 0, "message": "No references found."}

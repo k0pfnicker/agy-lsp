@@ -63,12 +63,15 @@ def is_safe_workspace_path(
 
 def find_workspace_root(start_path: Optional[str | Path] = None) -> str:
     """Find the workspace root by traversing upwards from start_path (or current directory)
-    looking for project indicators (.git, .sln, pyproject.toml, package.json, etc.).
+    looking for project indicators (.git, .sln, .slnx, .vcxproj, pyproject.toml, package.json, etc.).
     """
     current = Path(normalize_path(start_path or Path.cwd()))
+    if current.is_file():
+        current = current.parent
 
     markers = [
         ".git",
+        "agy-lsp.json",
         "pyproject.toml",
         "setup.py",
         "package.json",
@@ -86,7 +89,12 @@ def find_workspace_root(start_path: Optional[str | Path] = None) -> str:
                 return normalize_path(check_dir)
 
         try:
-            if list(check_dir.glob("*.sln")) or list(check_dir.glob("*.csproj")):
+            if (
+                list(check_dir.glob("*.sln"))
+                or list(check_dir.glob("*.slnx"))
+                or list(check_dir.glob("*.csproj"))
+                or list(check_dir.glob("*.vcxproj"))
+            ):
                 return normalize_path(check_dir)
         except (OSError, PermissionError):
             pass
@@ -97,6 +105,44 @@ def find_workspace_root(start_path: Optional[str | Path] = None) -> str:
         check_dir = parent
 
     return normalize_path(current)
+
+
+def find_compile_commands_dir(
+    target_file: Optional[str | Path],
+    workspace_root: Optional[str | Path],
+) -> Optional[str]:
+    """Locate a directory containing compile_commands.json for clangd.
+
+    Walks upwards from target_file to workspace_root, and also checks common build subdirectories.
+    """
+    roots_to_check: list[Path] = []
+    ws_path = Path(normalize_path(workspace_root)) if workspace_root else None
+
+    if target_file:
+        cur = Path(normalize_path(target_file))
+        if cur.is_file():
+            cur = cur.parent
+        while True:
+            roots_to_check.append(cur)
+            if ws_path and cur == ws_path:
+                break
+            parent = cur.parent
+            if parent == cur:
+                break
+            cur = parent
+
+    if ws_path and ws_path not in roots_to_check:
+        roots_to_check.append(ws_path)
+
+    for folder in roots_to_check:
+        if (folder / "compile_commands.json").is_file():
+            return normalize_path(folder)
+        for sub in ("build", "out", "07_build", "c_decompilation/07_build"):
+            cand = folder / sub
+            if (cand / "compile_commands.json").is_file():
+                return normalize_path(cand)
+
+    return None
 
 
 EXTENSION_LANGUAGE_MAP: dict[str, str] = {

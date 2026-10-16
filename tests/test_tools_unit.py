@@ -382,3 +382,72 @@ async def test_lsp_status(mock_manager, test_config):
     assert "servers" in res
     assert len(res["servers"]) == 1
     assert res["servers"][0]["status"] == "RUNNING"
+
+
+@pytest.mark.asyncio
+async def test_document_symbols_collapses_struct_fields_by_default(mock_manager, mock_client, test_config, sample_python_file):
+    mock_client.get_document_symbols = AsyncMock(
+        return_value=[
+            {
+                "name": "GepardRbtNode",
+                "kind": 23,  # Struct
+                "range": {
+                    "start": {"line": 10, "character": 0},
+                    "end": {"line": 20, "character": 0},
+                },
+                "children": [
+                    {
+                        "name": "left",
+                        "kind": 8,  # Field
+                        "range": {"start": {"line": 11, "character": 4}, "end": {"line": 11, "character": 12}},
+                    },
+                    {
+                        "name": "right",
+                        "kind": 8,  # Field
+                        "range": {"start": {"line": 12, "character": 4}, "end": {"line": 12, "character": 13}},
+                    },
+                ],
+            }
+        ]
+    )
+
+    # Default: fields are collapsed into fields_count
+    res_default = await document_symbols_tool(
+        mock_manager,
+        test_config,
+        file_path=str(sample_python_file),
+    )
+    assert res_default["count"] == 1
+    sym = res_default["symbols"][0]
+    assert sym["name"] == "GepardRbtNode"
+    assert sym["kind"] == "Struct"
+    assert "children" not in sym
+    assert sym["fields_count"] == 2
+
+    # With include_fields=True: fields are expanded
+    res_full = await document_symbols_tool(
+        mock_manager,
+        test_config,
+        file_path=str(sample_python_file),
+        include_fields=True,
+    )
+    sym_full = res_full["symbols"][0]
+    assert len(sym_full["children"]) == 2
+    assert sym_full["children"][0]["name"] == "left"
+
+
+def test_resolve_symbol_position_snaps_to_identifier(sample_python_file):
+    from agy_lsp.utils.formatting import resolve_symbol_position
+
+    # Line 4 is "class Calculator:" -> 'class' is at col 1..5, 'Calculator' is at col 7..16
+    # Even if agent passes column 1 (on keyword 'class') or column 50 (past end of line),
+    # resolve_symbol_position should snap to 'Calculator' (col 7)
+    line, col = resolve_symbol_position(sample_python_file, 4, 1)
+    assert line == 4
+    assert col == 7
+
+    # Explicit symbol_name match on line 10: "    def add(self, a: float, b: float) -> float:"
+    line2, col2 = resolve_symbol_position(sample_python_file, 10, 1, symbol_name="add")
+    assert line2 == 10
+    assert col2 == 9
+

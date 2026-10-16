@@ -29,6 +29,21 @@ def sample_cs_file(fixtures_dir: Path) -> Path:
 
 
 @pytest.fixture
+def sample_cpp_dir(fixtures_dir: Path) -> Path:
+    return fixtures_dir / "sample_cpp_project"
+
+
+@pytest.fixture
+def sample_cpp_header(sample_cpp_dir: Path) -> Path:
+    return sample_cpp_dir / "engine.h"
+
+
+@pytest.fixture
+def sample_cpp_source(sample_cpp_dir: Path) -> Path:
+    return sample_cpp_dir / "engine.c"
+
+
+@pytest.fixture
 def test_config(sample_python_dir: Path) -> PluginConfig:
     cfg = PluginConfig()
     cfg.workspaceRoot = normalize_path(sample_python_dir)

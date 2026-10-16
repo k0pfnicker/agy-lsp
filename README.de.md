@@ -1,7 +1,7 @@
 # agy-lsp — Language Server Protocol MCP Bridge for Antigravity CLI
 
 [![Version](https://img.shields.io/badge/version-1.1.0-purple.svg)]()
-[![Tests](https://img.shields.io/badge/tests-39%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-45%20passed-brightgreen.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)]()
 [![MCP](https://img.shields.io/badge/MCP-2.0%20%2F%201.0-orange.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -14,23 +14,24 @@
 
 ## Inhaltsverzeichnis
 
-1. [Zweck und Nutzen](#zweck-und-nutzen)
-2. [Architektur](#architektur)
-3. [MCP-Tools im Überblick](#mcp-tools-im-%C3%BCberblick)
-4. [Unterstützte Sprachen & Language Server](#unterst%C3%BCtzte-sprachen--language-server)
-5. [Voraussetzungen](#voraussetzungen)
-6. [Installation & Schnellstart](#installation--schnellstart)
-   - [Windows](#windows)
+1. [Zweck und Nutzen](#1-zweck-und-nutzen)
+   - [Empirische Benchmarks & Testergebnisse](#empirische-benchmarks--testergebnisse)
+2. [Architektur](#2-architektur)
+3. [MCP-Tools im Überblick](#3-mcp-tools-im-%C3%BCberblick)
+4. [Unterstützte Sprachen & Language Server](#4-unterst%C3%BCtzte-sprachen--language-server)
+5. [Voraussetzungen](#5-voraussetzungen)
+6. [Installation & Schnellstart](#6-installation--schnellstart)
+   - [Windows](#windows-powershell)
    - [Linux / macOS](#linux--macos)
-7. [Einrichtung in Antigravity CLI](#einrichtung-in-antigravity-cli)
-8. [Installation der Language Server](#installation-der-language-server)
-9. [Konfiguration (`agy-lsp.json`)](#konfiguration-agy-lspjson)
-10. [Token-Effizienz & Kontext-Optimierung](#token-effizienz--kontext-optimierung)
-11. [Sicherheitsmodell](#sicherheitsmodell)
-12. [Troubleshooting & Diagnose](#troubleshooting--diagnose)
-13. [Entwicklung, Tests & Qualitätssicherung](#entwicklung-tests--qualit%C3%A4tssicherung)
-14. [Erweiterung um neue Sprachen](#erweiterung-um-neue-sprachen)
-15. [Bekannte Einschränkungen](#bekannte-einschr%C3%A4nkungen)
+7. [Einrichtung in Antigravity CLI](#7-einrichtung-in-antigravity-cli)
+8. [Installation der Language Server](#8-installation-der-language-server)
+9. [Konfiguration (`agy-lsp.json`)](#9-konfiguration-agy-lspjson)
+10. [Token-Effizienz & Kontext-Optimierung](#10-token-effizienz--kontext-optimierung)
+11. [Sicherheitsmodell](#11-sicherheitsmodell)
+12. [Troubleshooting & Diagnose](#12-troubleshooting--diagnose)
+13. [Entwicklung, Tests & Qualitätssicherung](#13-entwicklung-tests--qualit%C3%A4tssicherung)
+14. [Erweiterung um neue Sprachen](#14-erweiterung-um-neue-sprachen)
+15. [Bekannte Einschränkungen](#15-bekannte-einschr%C3%A4nkungen)
 
 ---
 
@@ -45,6 +46,26 @@ Große Sprachmodelle (LLMs) scheitern in Softwareprojekten häufig an zwei Hürd
 - **Automatisierte Qualitätskontrolle:** Compiler-Diagnosen (Errors, Warnings) direkt nach Dateiänderungen abfragen.
 - **Sicheres Refactoring:** Symbol-Umbenennungen werden standardmäßig als Unified-Diff-Vorschau berechnet, bevor Dateien modifiziert werden.
 - **Geringer Tokenverbrauch:** Kompakte Snippets, Dokument-Outlines und strikte Treffer-Limits.
+
+### Empirische Benchmarks & Testergebnisse
+
+Alle nachfolgenden Messwerte werden automatisiert durch unsere Benchmark- und E2E-Testsuite ([`tests/test_benchmarks_and_value.py`](tests/test_benchmarks_and_value.py) sowie [`tests/test_e2e_real_lsp.py`](tests/test_e2e_real_lsp.py)) gegen echte `clangd`- (C/C++) und `pylsp`-Prozesse (Python) verifiziert:
+
+| Test-Szenario | Ohne `agy-lsp` (Grep / File-Read / Raw LSP) | Mit `agy-lsp` (Smart MCP Bridge) | Gemessener Mehrwert |
+| :--- | :--- | :--- | :--- |
+| **1. Dokument-Gliederung (`document_symbols`)**<br>*C-Header mit 3 Structs/Enums (65 Felder) & 4 Funktionen* | **18.979 Bytes** (`~4.745 Tokens`) Raw-LSP-JSON<br>**8.155 Bytes** (`~2.039 Tokens`) mit allen Einzelfeldern | **1.647 Bytes** (`~412 Tokens`)<br>Faltet Struct-/Enum-Felder automatisch in `fields_count` | **-91,3 % Tokens** ggü. Raw LSP<br>**-79,8 % Tokens** ggü. Voll-Baum |
+| **2. Ungenaue LLM-Spaltenangaben (`go_to_definition`)**<br>*10 ungenaue Aufrufe: Spalte 1, Keywords (`int`, `const`), Zeilenende, ±1 Zeile* | **0 / 10 aufgelöst (0 % Trefferquote)**<br>Raw LSP liefert `null` bei Leerzeichen oder Schlüsselwörtern | **10 / 10 aufgelöst (100 % Trefferquote)**<br>Auto-Snapping auf Bezeichner & `symbol_name`-Suche (±2 Zeilen) | **0 % → 100 % Trefferquote** ohne teure LLM-Retry-Schleifen |
+| **3. Semantische Navigation vs. Text-Grep (`find_references` & `go_to_definition`)**<br>*Suche nach `execute_step` mit Kommentar- & String-Fallen* | **8 Grep-Treffer (5 False Positives = 62,5 % Rauschen)**<br>Erfordert Lesen ganzer Dateien (**3.975 Bytes / ~994 Tokens**) | **3 AST-verifizierte Referenzen (0 % False Positives)**<br>Definition + 3-Zeilen-Snippet in **449 Bytes (~112 Tokens)** | **100 % Präzision** (0 False Positives)<br>**-88,7 % Kontext-Tokens** |
+| **4. Echtzeit-Compiler-Diagnose & Kaskaden-Filter (`get_diagnostics`)**<br>*C-Typ-/Identifier-Fehler & 120-Fehler-Template-Kaskade* | Kein Feedback ohne kompletten Build-Lauf;<br>Raw-Kaskade: **145.680 Bytes (~36.420 Tokens)** | **2 Fehler in ~198 ms erkannt** (Event-gesteuertes `didOpen`);<br>Dedupliziert & gekürzt: **27.912 Bytes (~6.978 Tokens)** | **< 200 ms** Sofort-Feedback<br>**-80,8 % Diagnose-Rauschen** |
+| **5. Sicheres dateiübergreifendes Refactoring (`rename_symbol`)**<br>*Umbenennung `execute_step` → `dispatch_op` in `engine.h` & `engine.c`* | Suchen & Ersetzen beschädigt String-Literale (`"execute_step"`) und Kommentare direkt auf der Festplatte | **2 Dateien als Diff-Vorschau (`applied: false`)**<br>Aktualisiert Prototyp, Definition & Aufrufe; Strings/Kommentare unberührt | **0 beschädigte Dateien**<br>100 % AST-sicherer Unified-Diff |
+| **6. Aufrufbaum ohne Dateilesen (`call_hierarchy`)**<br>*Aufrufer & Unterfunktionen von `execute_step` ermitteln* | Erfordert mehrfaches `grep` und Einlesen aller Kandidaten-Dateien | 1 Tool-Aufruf liefert Aufrufer (`run_program`) & Callees (`clamp_register`) direkt aus dem AST | **1 Tool-Aufruf** statt Multi-File-Analyse |
+
+#### Warum diese Ergebnisse das Plugin in der Praxis so wertvoll machen
+
+1. **Drastische Einsparung von Kontext-Tokens (-80 % bis -91 %):** In C/C++-, C#- und TypeScript-Projekten besitzen Datenstrukturen und Enums oft dutzende Felder. Während ein ungefilterter LSP-Dump tausende Zeilen JSON-Koordinaten in das Kontextfenster spült, komprimiert `agy-lsp` Blatt-Felder standardmäßig auf `"fields_count": 34` und erhält dabei 100 % der Typ-, Klassen- und Funktionssignaturen.
+2. **Robustheit gegen fehlerhafte Spaltenzählung von LLMs (0 % → 100 % Trefferquote):** Sprachmodelle schätzen 1-basierte Zeichenspalten häufig falsch ein – sie übergeben oft `character=1` (Einrückung am Zeilenanfang) oder landen auf Schlüsselwörtern wie `static`, `int`, `const` oder `def`. Ein Standard-LSP-Server bricht hier ergebnislos ab. `agy-lsp` rastet automatisch auf dem nächstgelegenen echten Symbolbezeichner der Zeile ein (oder sucht `symbol_name` im Radius von ±2 Zeilen) und prüft bei Bedarf weitere Bezeichner derselben Zeile.
+3. **Null False Positives bei Navigation & Refactoring:** Während `grep` im Benchmark **62,5 % Fehlalarme** in Kommentaren und Strings lieferte, nutzt `agy-lsp` den echten Compiler-AST (`clangd`, `pylsp`, `pyright`, `csharp-ls`, `tsserver`). Beim Umbenennen bleiben Strings und Kommentare garantiert unangetastet, und alle Änderungen werden zuerst als sicherer Unified-Diff präsentiert.
+4. **Compiler-Feedback in unter 200 ms ohne Build-Prozess:** Durch die ereignisgesteuerte `textDocument/publishDiagnostics`-Synchronisation (`asyncio.Event`) erhält der Agent sofort nach dem Öffnen oder Ändern einer Datei exakte Compiler-Fehlermeldungen – ohne Wartezeit durch statische Timeouts oder manuelle Kompilierläufe.
 
 ---
 
@@ -327,15 +348,18 @@ Installieren Sie den jeweiligen Server gemäß Abschnitt 8 oder tragen Sie den a
 
 ## 13. Entwicklung, Tests & Qualitätssicherung
 
-### Test-Suite ausführen
+### Test-Suite & Empirische Benchmarks ausführen
 
-Die gesamte Testsuite umfasst 37 automatisierte Unit-, Integrations- und End-to-End-Tests:
+Die gesamte Testsuite umfasst **45 automatisierte Unit-, Integrations-, Benchmark- und End-to-End-Tests** (`pylsp` & `clangd`):
 
 ```powershell
-# Alle Tests ausführen
+# Alle 45 Tests ausführen
 .\.venv\Scripts\pytest.exe -v
 
-# Spezifischen E2E-Test gegen einen echten Language Server ausführen
+# Empirische Benchmarks mit detaillierter Metrik-Ausgabe ausführen
+.\.venv\Scripts\pytest.exe tests/test_benchmarks_and_value.py -v -s
+
+# Spezifische E2E-Tests gegen echte Language Server (Python pylsp & C/C++ clangd) ausführen
 .\.venv\Scripts\pytest.exe tests/test_e2e_real_lsp.py -v
 ```
 

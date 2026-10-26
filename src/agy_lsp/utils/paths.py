@@ -162,10 +162,12 @@ EXTENSION_LANGUAGE_MAP: dict[str, str] = {
     ".jsx": "typescript",
     ".mjs": "typescript",
     ".cjs": "typescript",
+    ".rs": "rust",
+    ".go": "go",
 }
 
 
 def detect_language_from_path(file_path: str | Path) -> Optional[str]:
-    """Detect language identifier ('python', 'csharp', 'cpp', 'typescript') from file extension."""
+    """Detect language identifier ('python', 'csharp', 'cpp', 'typescript', 'rust', 'go') from file extension."""
     suffix = Path(file_path).suffix.lower()
     return EXTENSION_LANGUAGE_MAP.get(suffix)

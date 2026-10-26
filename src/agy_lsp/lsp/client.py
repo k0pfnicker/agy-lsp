@@ -401,9 +401,7 @@ class LspClient:
         """Send a position-based LSP request with smart column snapping and retry on empty result."""
         norm = normalize_path(file_path)
         uri = await self.ensure_file_synced(norm)
-        resolved_line, resolved_col = resolve_symbol_position(
-            norm, line_1idx, character_1idx, symbol_name=symbol_name
-        )
+        resolved_line, resolved_col = resolve_symbol_position(norm, line_1idx, character_1idx, symbol_name=symbol_name)
 
         def _build_params(col_1idx: int) -> dict[str, Any]:
             p: dict[str, Any] = {

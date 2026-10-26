@@ -66,5 +66,7 @@ def test_detect_language_from_path():
     assert detect_language_from_path("frontend/app.ts") == "typescript"
     assert detect_language_from_path("frontend/component.tsx") == "typescript"
     assert detect_language_from_path("frontend/bundle.js") == "typescript"
+    assert detect_language_from_path("crates/core/lib.rs") == "rust"
+    assert detect_language_from_path("cmd/server/main.go") == "go"
     assert detect_language_from_path("data.json") is None
     assert detect_language_from_path("README.md") is None

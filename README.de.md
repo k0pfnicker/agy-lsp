@@ -1,14 +1,17 @@
 # agy-lsp — Language Server Protocol MCP Bridge for Antigravity CLI
 
-[![Version](https://img.shields.io/badge/version-1.1.0-purple.svg)]()
-[![Tests](https://img.shields.io/badge/tests-45%20passed-brightgreen.svg)]()
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)]()
-[![MCP](https://img.shields.io/badge/MCP-2.0%20%2F%201.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-1.1.0-purple.svg)](#13-entwicklung-tests--qualitätssicherung)
+[![Tests](https://img.shields.io/badge/tests-46%20passed-brightgreen.svg)](#13-entwicklung-tests--qualitätssicherung)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](#13-entwicklung-tests--qualitätssicherung)
+[![MCP](https://img.shields.io/badge/MCP-2.0%20%2F%201.0-orange.svg)](https://modelcontextprotocol.io)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 *Dieses Dokument in anderen Sprachen: [English](README.md) | [Deutsch](README.de.md)*
 
-**agy-lsp** ist ein produktionsreifes, professionelles Plugin für das **Google Antigravity CLI (`agy`)**. Es verbindet den KI-Agenten über das standardisierte **Model Context Protocol (MCP)** mit nativen **Language Servern (LSP)** für C#, C/C++, TypeScript/JavaScript und Python.
+**agy-lsp** ist ein produktionsreifes, professionelles Plugin für das **Google Antigravity CLI (`agy`)**. Es verbindet den KI-Agenten über das standardisierte **Model Context Protocol (MCP)** mit nativen **Language Servern (LSP)** für C#, C/C++, TypeScript/JavaScript, Python, Rust und Go.
+
+> **Companion-Plugin:** Kombiniere `agy-lsp` (statische Code-Navigation & Diagnosen) mit [**agy-dap**](https://github.com/k0pfnicker/agy-dap) (hypothesengetriebenes Laufzeit-Debugging via DAP).
 
 ---
 
@@ -131,10 +134,12 @@ Das Plugin registriert 11 performante MCP-Tools:
 
 | Sprache | Primärer Server | Erkannte Dateiendungen | Projekt-Erkennungsmarker |
 | :--- | :--- | :--- | :--- |
-| **Python** | `pyright-langserver` *(Fallback: `pylsp`, `pyright`)* | `.py`, `.pyi` | `pyproject.toml`, `setup.py`, `requirements.txt` |
+| **Python** | `pyright-langserver` *(Fallback: `basedpyright-langserver`, `pylsp`, `pyright`)* | `.py`, `.pyi` | `pyproject.toml`, `setup.py`, `requirements.txt` |
 | **C#** | `csharp-ls` *(Fallback: `roslyn-language-server`)* | `.cs` | `*.sln`, `*.slnx`, `*.csproj` |
 | **C / C++** | `clangd` *(Fallback: `ccls`)* | `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, `.hxx` | `CMakeLists.txt`, `compile_commands.json`, `*.vcxproj` |
 | **TypeScript / JS**| `typescript-language-server` *(Fallback: `vtsls`)* | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs` | `package.json`, `tsconfig.json` |
+| **Rust** | `rust-analyzer` | `.rs` | `Cargo.toml` |
+| **Go** | `gopls` | `.go` | `go.mod` |
 
 ---
 

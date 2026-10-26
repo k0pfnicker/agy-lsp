@@ -2,9 +2,16 @@
 
 All notable changes to **agy-lsp** are documented in this file.
 
-## [1.1.0] - 2026-10-16
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.1.0] - 2026-10-26
 
 ### Added
+- **Built-in Rust & Go Language Server Support:** Pre-configured default adapters and installation hints for Rust (`rust-analyzer`) and Go (`gopls`).
+- **Enhanced Python Fallback Chain:** Added `basedpyright-langserver` to the automatic Python language server fallback sequence alongside `pyright-langserver` and `pylsp`.
+- **Reproducible Benchmark Suite (`scripts/benchmark.py` & `tests/test_benchmarks_and_value.py`):** Measures cold-start and warm-request latency (`document_symbols`, `go_to_definition`, `hover`) as well as compact MCP payload size vs. raw LSP responses and full-file reads.
+- **GitHub Actions CI Workflow (`.github/workflows/ci.yml`):** Automated multi-OS (`ubuntu-latest`, `windows-latest`) and multi-Python (`3.11`, `3.12`) pipeline running Ruff, unit/integration/E2E tests, and the benchmark script.
 - **One-Step Setup Helper (`setup_agy.py`)**: Automatically detects `.venv` executable paths, updates `~/.gemini/config/mcp_config.json`, installs `.agents/skills/agy-lsp/SKILL.md`, and removes duplicate plugin `mcp_config.json` entries.
 - **Zero-Config `.venv` Auto-Bootstrapping (`run_server.py`)**: Automatically creates `.venv` and installs dependencies on first launch when installed via `agy plugin install .`, and injects `.venv/Scripts` (or `.venv/bin`) into `PATH`.
 - **Smart Column Auto-Snapping (`resolve_symbol_position`)**: Position-based tools (`go_to_definition`, `find_references`, `hover`, `rename_symbol`, `prepare_call_hierarchy`, `call_hierarchy`, `get_type_hierarchy`) now automatically snap inaccurate LLM column estimates (`character`) or an optional `symbol_name` parameter to the actual identifier on the target line, with automatic fallback retry across candidate identifiers on the line.
@@ -15,6 +22,8 @@ All notable changes to **agy-lsp** are documented in this file.
 ### Fixed
 - **Event-Driven `get_diagnostics` Synchronization**: Replaced the static `200ms` sleep after `textDocument/didOpen` and `textDocument/didChange` with per-URI `asyncio.Event` signaling on `textDocument/publishDiagnostics`, eliminating empty diagnostic results on initial file open.
 - **Workspace Root Discovery (`AGY_LSP_WORKSPACE`)**: `load_config()` now honors the `AGY_LSP_WORKSPACE` environment variable and recognizes `.slnx`, `.vcxproj`, and `agy-lsp.json` markers.
+- **Isolated `PluginConfig.servers` Instances**: Uses `deepcopy(DEFAULT_SERVERS)` so per-instance server overrides never mutate module-level defaults.
+- Fixed Table of Contents anchor links in `README.md` and `README.de.md` and updated `pyproject.toml` metadata.
 
 ## [1.0.0] - 2026-03-31
 

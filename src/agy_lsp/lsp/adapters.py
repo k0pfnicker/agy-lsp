@@ -50,7 +50,18 @@ INSTALL_HINTS: dict[str, str] = {
         "Python Language Server is not installed or not in PATH.\n"
         "To install:\n"
         "  - python-lsp-server: pip install python-lsp-server\n"
+        "  - basedpyright: pip install basedpyright\n"
         "  - pyright: pip install pyright (or npm install -g pyright)"
+    ),
+    "rust": (
+        "Rust Language Server (rust-analyzer) is not installed or not in PATH.\n"
+        "To install rust-analyzer:\n"
+        "  rustup component add rust-analyzer"
+    ),
+    "go": (
+        "Go Language Server (gopls) is not installed or not in PATH.\n"
+        "To install gopls:\n"
+        "  go install golang.org/x/tools/gopls@latest"
     ),
 }
 

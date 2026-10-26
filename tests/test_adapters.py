@@ -24,4 +24,18 @@ def test_resolve_fallback_command():
     res = resolve_language_server("python", cfg)
     # pylsp was installed in .venv, so it should resolve via fallback!
     assert res.is_available is True
-    assert "pylsp" in res.command.lower()
+    assert "pylsp" in res.command.lower() or "basedpyright" in res.command.lower()
+
+
+def test_resolve_rust_and_go_install_hints():
+    cfg = PluginConfig()
+    cfg.servers["rust"].command = "nonexistent-rust-analyzer-bin"
+    cfg.servers["go"].command = "nonexistent-gopls-bin"
+
+    rust_res = resolve_language_server("rust", cfg)
+    assert rust_res.is_available is False
+    assert "rustup component add rust-analyzer" in (rust_res.install_hint or "")
+
+    go_res = resolve_language_server("go", cfg)
+    assert go_res.is_available is False
+    assert "golang.org/x/tools/gopls" in (go_res.install_hint or "")

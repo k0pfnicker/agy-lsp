@@ -15,7 +15,6 @@ from agy_lsp.utils.paths import (
     uri_to_path,
 )
 
-
 _LEAF_MEMBER_KINDS = {8, 22}  # Field (8), EnumMember (22)
 
 

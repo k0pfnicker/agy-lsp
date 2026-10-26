@@ -16,6 +16,10 @@ def test_default_config():
     assert "csharp" in cfg.servers
     assert "cpp" in cfg.servers
     assert "typescript" in cfg.servers
+    assert "rust" in cfg.servers
+    assert "go" in cfg.servers
+    assert cfg.servers["rust"].command == "rust-analyzer"
+    assert cfg.servers["go"].command == "gopls"
 
 
 def test_custom_config_file(tmp_path: Path):

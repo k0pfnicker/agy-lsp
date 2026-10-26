@@ -35,9 +35,20 @@
       "command": "pyright-langserver",
       "args": ["--stdio"],
       "fallbacks": [
+        { "command": "basedpyright-langserver", "args": ["--stdio"] },
         { "command": "pylsp", "args": [] },
         { "command": "pyright", "args": ["--langserver"] }
       ]
+    },
+    "rust": {
+      "command": "rust-analyzer",
+      "args": [],
+      "fallbacks": []
+    },
+    "go": {
+      "command": "gopls",
+      "args": ["serve"],
+      "fallbacks": []
     }
   }
 }

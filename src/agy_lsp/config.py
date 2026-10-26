@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -54,9 +55,20 @@ DEFAULT_SERVERS: dict[str, ServerConfig] = {
         command="pyright-langserver",
         args=["--stdio"],
         fallbacks=[
+            {"command": "basedpyright-langserver", "args": ["--stdio"]},
             {"command": "pylsp", "args": []},
             {"command": "pyright", "args": ["--langserver"]},
         ],
+    ),
+    "rust": ServerConfig(
+        command="rust-analyzer",
+        args=[],
+        fallbacks=[],
+    ),
+    "go": ServerConfig(
+        command="gopls",
+        args=["serve"],
+        fallbacks=[],
     ),
 }
 
@@ -75,7 +87,7 @@ class PluginConfig:
     serverStartupTimeoutMs: int = 15000
     requestTimeoutMs: int = 10000
     maxRestartAttempts: int = 2
-    servers: dict[str, ServerConfig] = field(default_factory=lambda: dict(DEFAULT_SERVERS))
+    servers: dict[str, ServerConfig] = field(default_factory=lambda: deepcopy(DEFAULT_SERVERS))
 
     @property
     def server_startup_timeout_sec(self) -> float:

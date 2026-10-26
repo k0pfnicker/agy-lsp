@@ -67,9 +67,7 @@ class LspManager:
                 )
         return await self.get_client_for_language(lang, target_file=file_path)
 
-    async def get_client_for_language(
-        self, language: str, target_file: Optional[str] = None
-    ) -> LspClient:
+    async def get_client_for_language(self, language: str, target_file: Optional[str] = None) -> LspClient:
         """Get or lazily start an LspClient for the given language."""
         async with self._lock:
             existing = self._clients.get(language)

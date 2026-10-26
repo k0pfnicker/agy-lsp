@@ -43,9 +43,7 @@ def _estimate_tokens(text: str) -> int:
 
 
 @pytest.mark.asyncio
-async def test_benchmark_1_token_compression_document_symbols(
-    sample_cpp_dir: Path, sample_cpp_header: Path
-):
+async def test_benchmark_1_token_compression_document_symbols(sample_cpp_dir: Path, sample_cpp_header: Path):
     """Benchmark 1: Measure payload & token savings of document_symbols vs. raw LSP and full file."""
     clangd_exe = find_executable("clangd")
     if not clangd_exe:
@@ -63,15 +61,11 @@ async def test_benchmark_1_token_compression_document_symbols(
         raw_lsp_json = json.dumps(raw_lsp_symbols)
 
         # 2. Full expanded document_symbols (include_fields=True)
-        expanded_res = await document_symbols_tool(
-            manager, cfg, str(sample_cpp_header), include_fields=True
-        )
+        expanded_res = await document_symbols_tool(manager, cfg, str(sample_cpp_header), include_fields=True)
         expanded_json = json.dumps(expanded_res)
 
         # 3. Default agy-lsp token-compact document_symbols (include_fields=False)
-        compact_res = await document_symbols_tool(
-            manager, cfg, str(sample_cpp_header), include_fields=False
-        )
+        compact_res = await document_symbols_tool(manager, cfg, str(sample_cpp_header), include_fields=False)
         compact_json = json.dumps(compact_res)
 
         reduction_vs_raw = (1.0 - (len(compact_json) / len(raw_lsp_json))) * 100.0
@@ -88,14 +82,18 @@ async def test_benchmark_1_token_compression_document_symbols(
 
         # Verify all top-level types and functions are preserved
         names = {s["name"] for s in compact_res["symbols"]}
-        assert {"Opcode", "VmContext", "PacketFrame", "vm_init", "execute_step", "run_program", "compute_checksum"}.issubset(names)
+        assert {
+            "Opcode",
+            "VmContext",
+            "PacketFrame",
+            "vm_init",
+            "execute_step",
+            "run_program",
+            "compute_checksum",
+        }.issubset(names)
 
         # Find the Struct/Enum symbols (distinct from their C typedefs)
-        with_fields = {
-            s["name"]: s["fields_count"]
-            for s in compact_res["symbols"]
-            if "fields_count" in s
-        }
+        with_fields = {s["name"]: s["fields_count"] for s in compact_res["symbols"] if "fields_count" in s}
         assert with_fields["Opcode"] == 21
         assert with_fields["VmContext"] == 34
         assert with_fields["PacketFrame"] == 10
@@ -212,9 +210,7 @@ async def test_benchmark_3_semantic_navigation_vs_grep(
                     grep_matches.append((f.name, idx, line_text.strip()))
 
         # Out of 8 grep matches, 5 are comments/strings (62.5% false positives!)
-        false_positives = [
-            m for m in grep_matches if m[2].startswith("*") or '"execute_step' in m[2]
-        ]
+        false_positives = [m for m in grep_matches if m[2].startswith("*") or '"execute_step' in m[2]]
 
         # 2. agy-lsp go_to_definition from call site in engine.c:72
         def_res = await go_to_definition_tool(
@@ -255,10 +251,10 @@ async def test_benchmark_3_semantic_navigation_vs_grep(
         assert len(false_positives) == 5
         assert ref_res["count"] == 3  # Only prototype (engine.h:89), def (engine.c:32), call (engine.c:72)
         assert ("engine.c", 33) not in ref_lines  # String literal ignored!
-        assert ("engine.c", 5) not in ref_lines   # Comment ignored!
-        assert ("engine.c", 6) not in ref_lines   # Comment ignored!
-        assert ("engine.h", 5) not in ref_lines   # Comment ignored!
-        assert ("engine.h", 6) not in ref_lines   # Comment ignored!
+        assert ("engine.c", 5) not in ref_lines  # Comment ignored!
+        assert ("engine.c", 6) not in ref_lines  # Comment ignored!
+        assert ("engine.h", 5) not in ref_lines  # Comment ignored!
+        assert ("engine.h", 6) not in ref_lines  # Comment ignored!
         assert def_res["count"] == 1
         assert def_res["definitions"][0]["line"] == 32
     finally:
@@ -307,7 +303,10 @@ async def test_benchmark_4_realtime_diagnostics_and_noise_reduction(tmp_path: Pa
 
         # Also benchmark diagnostic noise reduction (deduplication + 400-char truncation + limit)
         noisy_raw_diags = []
-        long_template_err = "error: no matching function for call to 'std::vector<std::basic_string<char>>::push_back' " + ("with template candidate details " * 30)
+        long_template_err = (
+            "error: no matching function for call to 'std::vector<std::basic_string<char>>::push_back' "
+            + ("with template candidate details " * 30)
+        )
         for i in range(120):
             # 60 duplicates at line 10, plus 60 distinct lines
             line_no = 10 if i < 60 else (i - 40)
@@ -325,7 +324,9 @@ async def test_benchmark_4_realtime_diagnostics_and_noise_reduction(tmp_path: Pa
         formatted = [format_diagnostic_item(d, "noisy.cpp") for d in noisy_raw_diags]
         deduped = deduplicate_diagnostics(formatted)
         limited, truncated, total = limit_and_sort_results(deduped, limit=50, sort_key="line")
-        compact_noisy_json = json.dumps({"count": len(limited), "total": total, "truncated": truncated, "diagnostics": limited})
+        compact_noisy_json = json.dumps(
+            {"count": len(limited), "total": total, "truncated": truncated, "diagnostics": limited}
+        )
 
         noise_reduction_pct = (1.0 - len(compact_noisy_json) / len(raw_noisy_json)) * 100.0
         print(

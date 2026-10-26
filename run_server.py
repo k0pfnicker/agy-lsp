@@ -43,7 +43,7 @@ if venv_py.is_file() and "AGY_LSP_VENV_ACTIVE" not in os.environ:
         env["AGY_LSP_VENV_ACTIVE"] = "1"
         env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
         try:
-            res = subprocess.call([str(venv_py), str( Path(__file__).resolve() )] + sys.argv[1:], env=env)
+            res = subprocess.call([str(venv_py), str(Path(__file__).resolve())] + sys.argv[1:], env=env)
             sys.exit(res)
         except Exception:
             pass  # Fall back to current python
@@ -56,4 +56,3 @@ from agy_lsp.server import main  # noqa: E402
 
 if __name__ == "__main__":
     main()
-

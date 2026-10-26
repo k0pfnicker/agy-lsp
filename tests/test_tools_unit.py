@@ -385,7 +385,9 @@ async def test_lsp_status(mock_manager, test_config):
 
 
 @pytest.mark.asyncio
-async def test_document_symbols_collapses_struct_fields_by_default(mock_manager, mock_client, test_config, sample_python_file):
+async def test_document_symbols_collapses_struct_fields_by_default(
+    mock_manager, mock_client, test_config, sample_python_file
+):
     mock_client.get_document_symbols = AsyncMock(
         return_value=[
             {
@@ -450,4 +452,3 @@ def test_resolve_symbol_position_snaps_to_identifier(sample_python_file):
     line2, col2 = resolve_symbol_position(sample_python_file, 10, 1, symbol_name="add")
     assert line2 == 10
     assert col2 == 9
-

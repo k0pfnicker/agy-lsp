@@ -43,7 +43,7 @@ def create_server(config: Optional[PluginConfig] = None) -> tuple[MCPServer, Lsp
 
     app = MCPServer(
         name="agy-lsp",
-        version="1.1.0",
+        version="1.2.0",
         description="Language Server Protocol (LSP) Bridge for Antigravity CLI. Provides diagnostics, definitions, references, hover, symbols, call hierarchy, and safe renaming.",
     )
 

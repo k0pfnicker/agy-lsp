@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 from typing import Any, Optional
 
@@ -10,12 +11,55 @@ from agy_lsp.lsp.manager import LspManager
 from agy_lsp.lsp.protocol import format_symbol_kind
 from agy_lsp.utils.formatting import limit_and_sort_results
 from agy_lsp.utils.paths import (
+    detect_language_from_path,
     is_safe_workspace_path,
     normalize_path,
     uri_to_path,
 )
 
 _LEAF_MEMBER_KINDS = {8, 22}  # Field (8), EnumMember (22)
+_EXECUTABLE_SYMBOL_KINDS = {"Function", "Method", "Constructor"}
+
+
+def _compute_first_executable_line(file_path: str | Path, decl_line: int, end_line: int) -> int:
+    """Compute the first executable statement line inside a function/method body (1-indexed)."""
+    try:
+        p = Path(file_path)
+        if not p.is_file():
+            return decl_line
+        source = p.read_text(encoding="utf-8", errors="replace")
+        lang = detect_language_from_path(p)
+        if lang == "python":
+            tree = ast.parse(source)
+            best_stmt_line: Optional[int] = None
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    node_end = getattr(node, "end_lineno", node.lineno)
+                    if node.lineno <= decl_line <= node_end or abs(node.lineno - decl_line) <= 1:
+                        body = list(node.body)
+                        # Skip leading docstring expression if followed by executable statements
+                        if (
+                            len(body) > 1
+                            and isinstance(body[0], ast.Expr)
+                            and isinstance(getattr(body[0], "value", None), ast.Constant)
+                            and isinstance(body[0].value.value, str)
+                        ):
+                            best_stmt_line = body[1].lineno
+                        elif body:
+                            best_stmt_line = body[0].lineno
+                        break
+            if best_stmt_line is not None:
+                return best_stmt_line
+
+        lines = source.splitlines()
+        for line_num in range(decl_line + 1, min(len(lines), end_line) + 1):
+            stripped = lines[line_num - 1].strip()
+            if not stripped or stripped in ("{", "}") or stripped.startswith(("//", "#", "/*", "*", '"""', "'''")):
+                continue
+            return line_num
+    except Exception:
+        pass
+    return decl_line
 
 
 def _format_symbol_node(
@@ -101,6 +145,113 @@ def _format_symbol_node(
         res["fields_count"] = omitted_fields
 
     return res
+
+
+def _match_symbol_in_tree(
+    nodes: list[dict[str, Any]],
+    target_parts: list[str],
+    parent_chain: Optional[list[str]] = None,
+) -> Optional[dict[str, Any]]:
+    """Search a formatted document_symbols tree for a simple ('add') or qualified ('Calculator.add') symbol."""
+    chain = parent_chain or []
+    for node in nodes:
+        name = str(node.get("name", ""))
+        base_name = name.split("(")[0].strip()
+        cur_chain = [*chain, base_name]
+
+        if len(target_parts) == 1:
+            if base_name == target_parts[0] or name == target_parts[0]:
+                return node
+        else:
+            if len(cur_chain) >= len(target_parts) and cur_chain[-len(target_parts) :] == target_parts:
+                return node
+
+        children = node.get("children", [])
+        if isinstance(children, list) and children:
+            found = _match_symbol_in_tree(children, target_parts, cur_chain)
+            if found is not None:
+                return found
+    return None
+
+
+async def resolve_symbol_target(
+    manager: LspManager,
+    config: PluginConfig,
+    symbol: str,
+    context_file: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    """Resolve a symbol name (e.g. 'calculate_total' or 'Calculator.add') to file, declaration line, and body_line.
+
+    Designed for direct integration with agy-dap SymbolResolver so breakpoints can target functions/methods by name.
+    """
+    cleaned = symbol.strip()
+    if not cleaned:
+        return None
+    parts = [p.strip() for p in cleaned.replace("::", ".").split(".") if p.strip()]
+    if not parts:
+        return None
+
+    if context_file:
+        doc_res = await document_symbols_tool(
+            manager=manager,
+            config=config,
+            file_path=context_file,
+            include_fields=True,
+            max_depth=6,
+        )
+        symbols = doc_res.get("symbols", [])
+        if isinstance(symbols, list) and symbols:
+            matched = _match_symbol_in_tree(symbols, parts)
+            if matched is not None:
+                norm_file = normalize_path(context_file)
+                decl_line = int(matched.get("line", 1))
+                end_line = int(matched.get("end_line", decl_line))
+                kind = str(matched.get("kind", "Function"))
+                body_line = (
+                    _compute_first_executable_line(norm_file, decl_line, end_line)
+                    if kind in _EXECUTABLE_SYMBOL_KINDS
+                    else decl_line
+                )
+                return {
+                    "name": matched.get("name", parts[-1]),
+                    "symbol": cleaned,
+                    "kind": kind,
+                    "file": norm_file,
+                    "line": decl_line,
+                    "body_line": body_line,
+                    "column": int(matched.get("column", 1)),
+                    "end_line": end_line,
+                    "provider": "agy-lsp",
+                }
+
+    # Fallback to workspace_symbols search
+    leaf_query = parts[-1]
+    ws_res = await workspace_symbols_tool(manager=manager, config=config, query=leaf_query, limit=25)
+    for item in ws_res.get("symbols", []):
+        if not isinstance(item, dict):
+            continue
+        item_name = str(item.get("name", "")).split("(")[0].strip()
+        if item_name == leaf_query:
+            if len(parts) > 1:
+                container = str(item.get("container") or "")
+                if parts[-2] not in container:
+                    continue
+            fpath = str(item.get("file", ""))
+            decl_line = int(item.get("line", 1))
+            body_line = _compute_first_executable_line(fpath, decl_line, decl_line + 50) if fpath else decl_line
+            return {
+                "name": item.get("name", leaf_query),
+                "symbol": cleaned,
+                "kind": str(item.get("kind", "Function")),
+                "file": fpath,
+                "line": decl_line,
+                "body_line": body_line,
+                "column": int(item.get("column", 1)),
+                "end_line": decl_line,
+                "provider": "agy-lsp",
+            }
+
+    return None
 
 
 async def document_symbols_tool(

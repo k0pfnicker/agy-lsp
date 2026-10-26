@@ -10,7 +10,7 @@ from agy_lsp.tools.hover import hover_tool
 from agy_lsp.tools.navigation import find_references_tool, go_to_definition_tool
 from agy_lsp.tools.refactor import rename_symbol_tool
 from agy_lsp.tools.status import lsp_status_tool
-from agy_lsp.tools.symbols import document_symbols_tool, workspace_symbols_tool
+from agy_lsp.tools.symbols import document_symbols_tool, resolve_symbol_target, workspace_symbols_tool
 
 __all__ = [
     "get_diagnostics_tool",
@@ -19,6 +19,7 @@ __all__ = [
     "rename_symbol_tool",
     "document_symbols_tool",
     "workspace_symbols_tool",
+    "resolve_symbol_target",
     "hover_tool",
     "prepare_call_hierarchy_tool",
     "call_hierarchy_tool",

@@ -1,7 +1,7 @@
 # agy-lsp — Language Server Protocol MCP Bridge for Antigravity CLI
 
-[![Version](https://img.shields.io/badge/version-1.1.0-purple.svg)](#13-entwicklung-tests--qualitätssicherung)
-[![Tests](https://img.shields.io/badge/tests-46%20passed-brightgreen.svg)](#13-entwicklung-tests--qualitätssicherung)
+[![Version](https://img.shields.io/badge/version-1.2.0-purple.svg)](#13-entwicklung-tests--qualitätssicherung)
+[![Tests](https://img.shields.io/badge/tests-47%20passed-brightgreen.svg)](#13-entwicklung-tests--qualitätssicherung)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](#13-entwicklung-tests--qualitätssicherung)
 [![MCP](https://img.shields.io/badge/MCP-2.0%20%2F%201.0-orange.svg)](https://modelcontextprotocol.io)

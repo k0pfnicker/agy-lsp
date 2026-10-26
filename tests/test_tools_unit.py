@@ -452,3 +452,22 @@ def test_resolve_symbol_position_snaps_to_identifier(sample_python_file):
     line2, col2 = resolve_symbol_position(sample_python_file, 10, 1, symbol_name="add")
     assert line2 == 10
     assert col2 == 9
+
+
+@pytest.mark.asyncio
+async def test_resolve_symbol_target_for_debugger_integration(mock_manager, test_config, sample_python_file):
+    from agy_lsp.tools.symbols import resolve_symbol_target
+
+    # Resolves a method 'Calculator.add' or 'add' and returns both declaration line (10)
+    # and first executable body statement line (12, skipping docstring on line 11)
+    res = await resolve_symbol_target(
+        manager=mock_manager,
+        config=test_config,
+        symbol="Calculator.add",
+        context_file=str(sample_python_file),
+    )
+    assert res is not None
+    assert res["name"] == "add"
+    assert res["line"] == 10
+    assert res["body_line"] == 12
+    assert res["end_line"] == 13

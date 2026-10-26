@@ -5,6 +5,11 @@ All notable changes to **agy-lsp** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-10-26
+
+### Added
+- **Cross-Plugin Symbol Resolution for `agy-dap` (`resolve_symbol_target`):** Added `agy_lsp.tools.symbols.resolve_symbol_target()` to resolve function, method, and class symbols via `textDocument/documentSymbol` or `workspace/symbol` and automatically compute `body_line` (the first executable statement inside the function body, skipping Python docstrings and C/C#/Rust/Go opening braces) for direct symbol-based breakpoint placement in [**agy-dap**](https://github.com/k0pfnicker/agy-dap).
+
 ## [1.1.0] - 2026-10-26
 
 ### Added
